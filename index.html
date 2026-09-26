@@ -772,6 +772,8 @@
       document.getElementById("live-room").classList.add("hidden");
       document.getElementById("bottom-nav").classList.remove("hidden");
       document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
+      // Stop feed previews when leaving feed
+      if (name !== "feed" && typeof stopAllFeedPreviews === "function") stopAllFeedPreviews();
       if (name === "feed") {
         document.getElementById("feed-screen").classList.remove("hidden");
         document.getElementById("nav-feed").classList.add("active");
@@ -785,12 +787,23 @@
       }
     }
 
+    // Preview connections for feed (live video on cards)
+    let feedPreviewRooms = {};
+
     async function loadFeed() {
+      // Cleanup previous previews
+      Object.values(feedPreviewRooms).forEach(r => { try { r.disconnect(); } catch(_){} });
+      feedPreviewRooms = {};
+
       const list = document.getElementById("feed-list");
       list.innerHTML = `<div class="empty-feed"><div class="spinner"></div><p class="mt-4">Inapakia lives...</p></div>`;
       try {
         const res = await fetch(`${API_URL}/rooms?active_only=true&public_only=true`);
-        const rooms = await res.json();
+        let rooms = await res.json();
+        // Only active lives
+        if (Array.isArray(rooms)) {
+          rooms = rooms.filter(r => r.is_active !== false);
+        }
         if (!Array.isArray(rooms) || !rooms.length) {
           list.innerHTML = `
             <div class="empty-feed">
@@ -801,37 +814,91 @@
             </div>`;
           return;
         }
-        list.innerHTML = rooms.map(r => {
-          const bgStyle = r.thumbnail
-            ? `background-image:url(${r.thumbnail.startsWith('http') ? r.thumbnail : API_URL + r.thumbnail})`
-            : `background:linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)`;
-          return `
-            <div class="feed-card" onclick="joinFromFeed('${r.room_id}')">
-              <div class="feed-bg" style="${bgStyle}"></div>
-              <div class="feed-gradient"></div>
-              <div class="feed-info">
-                <div class="live-pill mb-3">LIVE</div>
-                <h2 class="text-xl font-bold mb-1">${esc(r.title)}</h2>
-                <p class="text-sm text-zinc-300">@${esc(r.host_username)} · ${r.viewer_count || 0} watazamaji</p>
+        list.innerHTML = rooms.map(r => `
+          <div class="feed-card" data-room="${r.room_id}" onclick="joinFromFeed('${r.room_id}')">
+            <video class="feed-video" id="feed-vid-${r.room_id}" autoplay playsinline muted
+              style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#111;"></video>
+            <div class="feed-gradient"></div>
+            <div class="feed-info">
+              <div class="live-pill mb-3">LIVE</div>
+              <h2 class="text-xl font-bold mb-1">${esc(r.title)}</h2>
+              <p class="text-sm text-zinc-300">@${esc(r.host_username)} · ${r.viewer_count || 0} watazamaji</p>
+            </div>
+            <div class="feed-side">
+              <div class="feed-side-btn">
+                <div class="feed-side-icon">${(r.host_username||'?').charAt(0).toUpperCase()}</div>
+                <span class="text-[10px] font-semibold">Host</span>
               </div>
-              <div class="feed-side">
-                <div class="feed-side-btn">
-                  <div class="feed-side-icon">${(r.host_username||'?').charAt(0).toUpperCase()}</div>
-                  <span class="text-[10px] font-semibold">Host</span>
+              <div class="feed-side-btn">
+                <div class="feed-side-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                 </div>
-                <div class="feed-side-btn">
-                  <div class="feed-side-icon">▶</div>
-                  <span class="text-[10px] font-semibold">Ingia</span>
-                </div>
+                <span class="text-[10px] font-semibold">Ingia</span>
               </div>
-            </div>`;
-        }).join("");
+            </div>
+          </div>
+        `).join("");
+
+        // Start live video previews (max 3 at a time for performance)
+        rooms.slice(0, 3).forEach(r => startFeedPreview(r.room_id, r.host_username));
       } catch (e) {
         list.innerHTML = `<div class="empty-feed"><p>Hitilafu kupakia lives</p><button onclick="loadFeed()" class="mt-4 px-6 py-2 bg-pink-600 rounded-full text-sm">Jaribu tena</button></div>`;
       }
     }
 
-    function joinFromFeed(roomId) { joinRoom(roomId, false); }
+    async function startFeedPreview(roomId, hostName) {
+      if (!token || feedPreviewRooms[roomId]) return;
+      const videoEl = document.getElementById(`feed-vid-${roomId}`);
+      if (!videoEl) return;
+      try {
+        const res = await fetch(`${API_URL}/token`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+          body: JSON.stringify({ room_id: roomId, identity: username + "_preview_" + Date.now(), role: "viewer" })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.url || !data.token) return;
+
+        const previewRoom = new LivekitClient.Room({ adaptiveStream: true, dynacast: true });
+        feedPreviewRooms[roomId] = previewRoom;
+
+        previewRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub, participant) => {
+          if (track.kind === "video") {
+            // Prefer host track
+            if (!hostName || participant.identity === hostName || !videoEl.srcObject) {
+              track.attach(videoEl);
+              videoEl.muted = true;
+              videoEl.play().catch(()=>{});
+            }
+          }
+        });
+
+        await previewRoom.connect(data.url, data.token);
+
+        // Attach already present tracks
+        previewRoom.remoteParticipants.forEach(p => {
+          p.videoTrackPublications.forEach(pub => {
+            if (pub.track) {
+              pub.track.attach(videoEl);
+              videoEl.muted = true;
+              videoEl.play().catch(()=>{});
+            }
+          });
+        });
+      } catch (e) {
+        console.warn("Feed preview failed for", roomId, e);
+      }
+    }
+
+    function stopAllFeedPreviews() {
+      Object.values(feedPreviewRooms).forEach(r => { try { r.disconnect(); } catch(_){} });
+      feedPreviewRooms = {};
+    }
+
+    function joinFromFeed(roomId) {
+      stopAllFeedPreviews();
+      joinRoom(roomId, false);
+    }
 
     async function createLive() {
       const title = document.getElementById("live-title").value.trim() || "Live Stream";
@@ -1164,6 +1231,14 @@
       box.appendChild(div);
       while (box.children.length > 30) box.removeChild(box.firstChild);
       box.scrollTop = box.scrollHeight;
+      // System messages disappear after 1.5 seconds
+      if (isSystem) {
+        setTimeout(() => {
+          div.style.transition = "opacity 0.35s ease";
+          div.style.opacity = "0";
+          setTimeout(() => div.remove(), 350);
+        }, 1500);
+      }
     }
     function esc(t) { const d=document.createElement("div"); d.textContent=t; return d.innerHTML; }
 
