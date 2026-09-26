@@ -854,7 +854,11 @@
         const res = await fetch(`${API_URL}/token`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-          body: JSON.stringify({ room_id: roomId, identity: username + "_preview_" + Date.now(), role: "viewer" })
+          body: JSON.stringify({
+            room_id: roomId,
+            identity: `preview_${username}_${Math.random().toString(36).slice(2, 8)}`,
+            role: "viewer"
+          })
         });
         const data = await res.json();
         if (!res.ok || !data.url || !data.token) return;
@@ -863,8 +867,7 @@
         feedPreviewRooms[roomId] = previewRoom;
 
         previewRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub, participant) => {
-          if (track.kind === "video") {
-            // Prefer host track
+          if (track.kind === "video" && feedPreviewRooms[roomId] === previewRoom) {
             if (!hostName || participant.identity === hostName || !videoEl.srcObject) {
               track.attach(videoEl);
               videoEl.muted = true;
@@ -875,7 +878,12 @@
 
         await previewRoom.connect(data.url, data.token);
 
-        // Attach already present tracks
+        if (feedPreviewRooms[roomId] !== previewRoom) {
+          // Already stopped while connecting
+          try { previewRoom.disconnect(); } catch(_){}
+          return;
+        }
+
         previewRoom.remoteParticipants.forEach(p => {
           p.videoTrackPublications.forEach(pub => {
             if (pub.track) {
@@ -887,17 +895,29 @@
         });
       } catch (e) {
         console.warn("Feed preview failed for", roomId, e);
+        delete feedPreviewRooms[roomId];
       }
     }
 
-    function stopAllFeedPreviews() {
-      Object.values(feedPreviewRooms).forEach(r => { try { r.disconnect(); } catch(_){} });
+    async function stopAllFeedPreviews() {
+      const rooms = Object.values(feedPreviewRooms);
       feedPreviewRooms = {};
+      await Promise.all(rooms.map(async (r) => {
+        try {
+          r.removeAllListeners();
+          await r.disconnect();
+        } catch(_){}
+      }));
     }
 
-    function joinFromFeed(roomId) {
-      stopAllFeedPreviews();
-      joinRoom(roomId, false);
+    async function joinFromFeed(roomId) {
+      // Stop previews first and wait — avoids "Client initiated disconnect"
+      try {
+        await stopAllFeedPreviews();
+      } catch(_){}
+      // Small pause so LiveKit finishes cleanup
+      await new Promise(r => setTimeout(r, 300));
+      await joinRoom(roomId, false);
     }
 
     async function createLive() {
@@ -1023,7 +1043,58 @@
         refreshViewerList();
       } catch (e) {
         console.error("Join error:", e);
-        alert("Hitilafu kuunganisha live: " + (e.message || e));
+        const msg = String(e.message || e || "");
+        // Ignore benign disconnect during preview→join switch
+        if (msg.toLowerCase().includes("client initiated disconnect")) {
+          // Retry join once cleanly
+          try {
+            await stopAllFeedPreviews();
+            await new Promise(r => setTimeout(r, 500));
+            if (room) { try { await room.disconnect(); } catch(_){} room = null; }
+            // Re-fetch token and connect
+            const res2 = await fetch(`${API_URL}/token`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+              body: JSON.stringify({ room_id: roomId, identity: username, role: asHost ? "host" : "viewer" })
+            });
+            const data2 = await res2.json();
+            if (!res2.ok || !data2.url || !data2.token) throw e;
+            room = new LivekitClient.Room({ adaptiveStream: true, dynacast: true });
+            room.on(LivekitClient.RoomEvent.TrackSubscribed, handleTrackSubscribed);
+            room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => { if (track.kind === "video") track.detach(); });
+            room.on(LivekitClient.RoomEvent.ParticipantConnected, () => { updateViewerCount(); refreshViewerList(); });
+            room.on(LivekitClient.RoomEvent.ParticipantDisconnected, onParticipantLeft);
+            room.on(LivekitClient.RoomEvent.DataReceived, handleData);
+            room.on(LivekitClient.RoomEvent.Disconnected, () => { if (!isHost) showEnded(); });
+            await room.connect(data2.url, data2.token);
+            document.getElementById("feed-screen").classList.add("hidden");
+            document.getElementById("create-screen").classList.add("hidden");
+            document.getElementById("profile-screen").classList.add("hidden");
+            document.getElementById("live-room").classList.remove("hidden");
+            document.getElementById("bottom-nav").classList.add("hidden");
+            if (!asHost) {
+              document.getElementById("btn-join-req").style.display = "flex";
+              document.getElementById("btn-like").style.display = "flex";
+              room.remoteParticipants.forEach(p => {
+                p.trackPublications.forEach(pub => {
+                  if (pub.track && pub.track.kind === "video") attachMainVideo(p);
+                  if (pub.track && pub.track.kind === "audio") pub.track.attach();
+                });
+              });
+            }
+            updateViewerCount();
+            renderGifts();
+            renderReactions();
+            refreshViewerList();
+            return;
+          } catch (e2) {
+            console.error("Retry failed:", e2);
+            alert("Hitilafu kuunganisha live: " + (e2.message || e2));
+            showTab("feed");
+            return;
+          }
+        }
+        alert("Hitilafu kuunganisha live: " + msg);
         showTab("feed");
       }
     }
