@@ -637,6 +637,16 @@
     }
     function logout() { localStorage.clear(); location.reload(); }
 
+    // If token is invalid → force re-login
+    function handleAuthError(res, data) {
+      if (res.status === 401 || (data && String(data.detail || "").toLowerCase().includes("credential"))) {
+        alert("Session imeisha. Tafadhali ingia tena.");
+        logout();
+        return true;
+      }
+      return false;
+    }
+
     function enterApp() {
       document.getElementById("auth-screen").classList.add("hidden");
       document.getElementById("bottom-nav").classList.remove("hidden");
@@ -720,6 +730,7 @@
           body: JSON.stringify({ title, is_public: isPublic })
         });
         const data = await res.json();
+        if (handleAuthError(res, data)) return;
         if (res.ok) joinRoom(data.room_id, true);
         else alert("Hitilafu: " + (data.detail||""));
       } catch { alert("Tatizo la mtandao"); }
@@ -734,6 +745,7 @@
           body: JSON.stringify({ room_id: roomId, identity: username, role: asHost ? "host" : "viewer" })
         });
         const data = await res.json();
+        if (handleAuthError(res, data)) return;
         if (!res.ok) { alert("Imeshindikana: " + (data.detail||"")); showTab("feed"); return; }
 
         room = new LivekitClient.Room({ adaptiveStream:true, dynacast:true });
