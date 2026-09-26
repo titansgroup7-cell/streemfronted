@@ -268,26 +268,72 @@
     #image-overlay.show { display: block; animation: overlayIn 0.4s ease; }
     @keyframes overlayIn { from { opacity: 0; transform: translateX(-50%) scale(0.8); } to { opacity: 1; transform: translateX(-50%) scale(1); } }
 
-    #host-bar {
-      position: absolute; top: 70px; left: 12px; z-index: 40;
-      display: none; gap: 6px; flex-wrap: wrap; max-width: 240px;
+    /* Hamburger host menu - bottom left */
+    #host-menu-wrap {
+      position: absolute; bottom: 90px; left: 12px; z-index: 55;
+      display: none; flex-direction: column; align-items: flex-start; gap: 8px;
     }
-    #host-bar.show { display: flex; }
+    #host-menu-wrap.show { display: flex; }
+    #host-burger {
+      width: 48px; height: 48px; border-radius: 50%; border: none; cursor: pointer;
+      background: rgba(0,0,0,0.6); backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.15);
+      display: flex; align-items: center; justify-content: center; color: #fff;
+    }
+    #host-burger svg { width: 22px; height: 22px; }
+    #host-menu {
+      display: none; flex-direction: column; gap: 6px;
+      background: rgba(15,15,24,0.95); backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 16px;
+      padding: 10px; min-width: 160px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+    }
+    #host-menu.open { display: flex; }
     .host-ctrl {
-      padding: 7px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
-      background: rgba(0,0,0,0.55); backdrop-filter: blur(12px);
-      border: 1px solid rgba(255,255,255,0.12); color: #fff; cursor: pointer;
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 12px; font-size: 13px; font-weight: 600;
+      background: rgba(255,255,255,0.06); border: none; color: #fff; cursor: pointer; width: 100%;
+      text-align: left;
     }
-    .host-ctrl.danger { background: rgba(255,45,85,0.7); border-color: transparent; }
+    .host-ctrl:active { background: rgba(255,255,255,0.12); }
+    .host-ctrl svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .host-ctrl.danger { background: rgba(255,45,85,0.25); color: #ff6b8a; }
+    .host-ctrl .badge-count {
+      margin-left: auto; background: #ff2d55; color: #fff;
+      font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 10px;
+    }
 
-    #request-toast {
-      position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
-      background: rgba(0,0,0,0.85); backdrop-filter: blur(16px);
-      border: 1px solid rgba(255,255,255,0.15); border-radius: 16px;
-      padding: 12px 16px; z-index: 70; display: none; align-items: center; gap: 12px;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.5); max-width: 90%;
+    /* Co-host requests panel */
+    #cohost-requests {
+      position: absolute; bottom: 150px; left: 12px; z-index: 56;
+      width: min(280px, 85vw); max-height: 40vh; overflow-y: auto;
+      background: rgba(15,15,24,0.96); backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,0.12); border-radius: 16px;
+      padding: 12px; display: none;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5);
     }
-    #request-toast.show { display: flex; }
+    #cohost-requests.open { display: block; }
+    .req-item {
+      display: flex; align-items: center; gap: 10px; padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .req-item:last-child { border-bottom: none; }
+    .req-av {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: linear-gradient(135deg,#667eea,#764ba2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; flex-shrink: 0;
+    }
+    .req-actions { display: flex; gap: 6px; margin-left: auto; }
+    .req-btn {
+      padding: 5px 10px; border-radius: 8px; font-size: 11px; font-weight: 700;
+      border: none; cursor: pointer; color: #fff;
+    }
+    .req-btn.accept { background: #10b981; }
+    .req-btn.reject { background: rgba(255,255,255,0.12); }
+
+    .icon-svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .side-icon svg { width: 22px; height: 22px; }
 
     .viewer-item {
       display: flex; align-items: center; gap: 10px; padding: 10px;
@@ -343,311 +389,6 @@
       }
       .bottom-panel { transform: translateY(110%); }
       .bottom-panel.open { transform: translateY(0); }
-    }
-
-
-    /* =========================================================
-       LIVE STREAM PRO — PRODUCTION UI POLISH
-       CSS ONLY: existing HTML + JavaScript functionality preserved
-       ========================================================= */
-    html { background:#08080c; }
-    body { min-height:100dvh; overscroll-behavior:none; }
-
-    button, input { font:inherit; }
-    button { -webkit-user-select:none; user-select:none; }
-    button:focus-visible, input:focus-visible {
-      outline:2px solid rgba(255,45,85,.85);
-      outline-offset:2px;
-    }
-
-    /* AUTH */
-    #auth-screen {
-      padding:clamp(16px,5vw,28px) !important;
-      background:
-        radial-gradient(circle at 50% -10%, rgba(255,45,85,.22), transparent 42%),
-        radial-gradient(circle at 0% 100%, rgba(37,244,238,.08), transparent 35%),
-        #08080c !important;
-    }
-    #auth-screen .glass-card {
-      width:min(100%,390px);
-      padding:clamp(22px,6vw,34px) !important;
-      background:rgba(17,17,25,.78);
-      border:1px solid rgba(255,255,255,.09);
-      box-shadow:0 24px 80px rgba(0,0,0,.58), 0 0 40px rgba(255,45,85,.08);
-    }
-    #auth-screen .text-5xl {
-      display:inline-flex;
-      width:64px;height:64px;
-      align-items:center;justify-content:center;
-      border-radius:20px;
-      background:linear-gradient(135deg,rgba(255,45,85,.2),rgba(255,107,53,.12));
-      border:1px solid rgba(255,255,255,.08);
-      box-shadow:0 0 35px rgba(255,45,85,.18);
-    }
-    #login-form input, #register-form input {
-      min-height:50px;
-      background:rgba(255,255,255,.055) !important;
-      border-color:rgba(255,255,255,.09) !important;
-      transition:border-color .2s, box-shadow .2s, background .2s;
-    }
-    #login-form input:focus, #register-form input:focus {
-      background:rgba(255,255,255,.075) !important;
-      border-color:rgba(255,45,85,.65) !important;
-      box-shadow:0 0 0 4px rgba(255,45,85,.09);
-    }
-
-    /* GLOBAL INTERACTION */
-    button { transition:transform .18s ease, filter .18s ease, background .18s ease, box-shadow .18s ease; }
-    button:hover { filter:brightness(1.08); }
-    button:active { transform:scale(.96); }
-
-    /* FEED */
-    #feed-screen { background:#08080c; }
-    .feed-card {
-      height:100dvh;
-      min-height:100dvh;
-      isolation:isolate;
-    }
-    .feed-bg {
-      transform:scale(1.01);
-      transition:transform .8s cubic-bezier(.2,.7,.2,1), filter .5s ease;
-      will-change:transform;
-    }
-    .feed-card:hover .feed-bg { transform:scale(1.045); }
-    .feed-gradient {
-      background:
-        linear-gradient(to top,rgba(0,0,0,.92) 0%,rgba(0,0,0,.58) 22%,transparent 52%),
-        linear-gradient(to bottom,rgba(0,0,0,.45),transparent 25%);
-      z-index:1;
-    }
-    .feed-info { bottom:max(92px,calc(72px + env(safe-area-inset-bottom))); }
-    .feed-info h2 { line-height:1.2; text-shadow:0 2px 14px rgba(0,0,0,.7); }
-    .feed-side { bottom:max(112px,calc(92px + env(safe-area-inset-bottom))); gap:16px; }
-    .feed-side-btn { text-shadow:0 2px 8px rgba(0,0,0,.7); }
-    .feed-side-icon {
-      border:1px solid rgba(255,255,255,.12);
-      box-shadow:0 8px 24px rgba(0,0,0,.28);
-      transition:transform .18s ease,background .18s ease;
-    }
-    .feed-side-btn:active .feed-side-icon { transform:scale(.9); }
-    .live-pill {
-      box-shadow:0 5px 18px rgba(255,45,85,.3);
-      animation:livePillPulse 1.8s ease-in-out infinite;
-    }
-    @keyframes livePillPulse {
-      0%,100%{box-shadow:0 5px 18px rgba(255,45,85,.25)}
-      50%{box-shadow:0 5px 28px rgba(255,45,85,.5)}
-    }
-
-    /* BOTTOM NAV */
-    #bottom-nav {
-      padding:8px 8px calc(9px + env(safe-area-inset-bottom));
-      background:rgba(10,10,15,.88);
-      box-shadow:0 -12px 35px rgba(0,0,0,.38);
-      border-top:1px solid rgba(255,255,255,.07);
-    }
-    .nav-item {
-      position:relative;
-      min-width:74px;
-      min-height:48px;
-      justify-content:center;
-      border-radius:15px;
-      color:#777;
-    }
-    .nav-item.active {
-      color:#fff;
-      background:rgba(255,255,255,.06);
-    }
-    .nav-item.active::before {
-      content:"";
-      position:absolute;
-      top:0;
-      width:24px;height:2px;
-      border-radius:4px;
-      background:#ff2d55;
-      box-shadow:0 0 12px rgba(255,45,85,.8);
-    }
-    .nav-item .nav-icon { line-height:1; }
-
-    /* LIVE STAGE */
-    #live-stage { background:#000; overflow:hidden; }
-    #main-video { background:#09090d; }
-    #video-loading { background:radial-gradient(circle at center,rgba(28,28,48,.96),#050509 72%); }
-    .spinner {
-      width:44px;height:44px;
-      border-width:3px;
-      box-shadow:0 0 25px rgba(255,45,85,.18);
-    }
-    #top-bar {
-      padding-top:max(12px,calc(8px + env(safe-area-inset-top)));
-      padding-left:12px;padding-right:12px;
-    }
-    .host-pill {
-      box-shadow:0 8px 25px rgba(0,0,0,.28);
-    }
-    .host-avatar { box-shadow:0 0 18px rgba(255,45,85,.2); }
-    .live-badge {
-      box-shadow:0 0 18px rgba(255,45,85,.35);
-    }
-    .side-icon {
-      background:rgba(8,8,14,.48);
-      box-shadow:0 8px 24px rgba(0,0,0,.32);
-    }
-    .side-btn:hover .side-icon { background:rgba(255,255,255,.17); }
-    .liked .side-icon {
-      box-shadow:0 0 22px rgba(255,45,85,.3);
-    }
-
-    /* CHAT */
-    #chat-float {
-      width:min(300px,72vw);
-      bottom:calc(92px + env(safe-area-inset-bottom));
-      max-height:32vh;
-    }
-    .chat-bubble {
-      width:max-content;
-      max-width:100%;
-      background:rgba(0,0,0,.48);
-      border:1px solid rgba(255,255,255,.075);
-      box-shadow:0 5px 18px rgba(0,0,0,.16);
-      backdrop-filter:blur(14px);
-      -webkit-backdrop-filter:blur(14px);
-    }
-
-    /* BOTTOM COMPOSER */
-    #bottom-bar {
-      padding:9px 10px calc(10px + env(safe-area-inset-bottom));
-      background:linear-gradient(to top,rgba(0,0,0,.9),rgba(0,0,0,.3),transparent);
-    }
-    #chat-input {
-      min-width:0;
-      min-height:44px;
-      background:rgba(15,15,22,.66);
-      backdrop-filter:blur(16px);
-      -webkit-backdrop-filter:blur(16px);
-      box-shadow:inset 0 0 0 1px rgba(255,255,255,.025);
-      transition:border-color .2s,box-shadow .2s,background .2s;
-    }
-    #chat-input:focus {
-      border-color:rgba(255,45,85,.55);
-      background:rgba(20,20,28,.8);
-      box-shadow:0 0 0 3px rgba(255,45,85,.08);
-    }
-    .bottom-icon-btn {
-      box-shadow:0 5px 18px rgba(0,0,0,.22);
-      border:1px solid rgba(255,255,255,.08);
-    }
-
-    /* PANELS */
-    .bottom-panel {
-      padding:14px 14px calc(20px + env(safe-area-inset-bottom));
-      background:linear-gradient(180deg,rgba(24,24,35,.98),rgba(11,11,17,.99));
-      box-shadow:0 -20px 60px rgba(0,0,0,.58);
-      backdrop-filter:blur(22px);
-      -webkit-backdrop-filter:blur(22px);
-    }
-    .panel-handle { width:44px;height:4px;opacity:.7; }
-    .panel-title { min-height:34px; }
-    .panel-close { transition:transform .18s,background .18s; }
-    .panel-close:hover { background:rgba(255,255,255,.16); }
-    .fx-preview {
-      box-shadow:0 8px 18px rgba(0,0,0,.2);
-    }
-    .fx-item.active .fx-preview {
-      box-shadow:0 0 0 2px rgba(255,45,85,.22),0 8px 25px rgba(255,45,85,.2);
-    }
-    .gift-item {
-      min-height:88px;
-      box-shadow:0 5px 18px rgba(0,0,0,.12);
-    }
-    .gift-item:hover { background:rgba(255,255,255,.08); }
-    .react-btn { box-shadow:0 5px 18px rgba(0,0,0,.14); }
-
-    /* HOST CONTROLS */
-    #host-bar { max-width:min(290px,75vw); }
-    .host-ctrl {
-      box-shadow:0 5px 18px rgba(0,0,0,.28);
-      backdrop-filter:blur(16px);
-      -webkit-backdrop-filter:blur(16px);
-    }
-    .host-ctrl:hover { background:rgba(255,255,255,.12); }
-    .host-ctrl.danger:hover { background:rgba(255,45,85,.85); }
-
-    /* GUEST TILES */
-    .guest-tile {
-      box-shadow:0 8px 28px rgba(0,0,0,.5);
-      border-color:rgba(255,255,255,.18);
-    }
-    .guest-tile video { background:#09090d; }
-
-    /* OVERLAYS */
-    #image-overlay {
-      max-width:min(78%,340px);
-      max-height:42%;
-      background:#111;
-      box-shadow:0 18px 50px rgba(0,0,0,.7);
-    }
-    #request-toast {
-      width:min(92%,390px);
-      box-shadow:0 15px 45px rgba(0,0,0,.55);
-    }
-    #ended-overlay {
-      background:
-        radial-gradient(circle at 50% 40%,rgba(255,45,85,.12),transparent 32%),
-        radial-gradient(circle at center,#181827 0%,#07070b 72%);
-    }
-
-    /* PROFILE / CREATE */
-    #create-screen, #profile-screen {
-      background:
-        radial-gradient(circle at 50% -10%,rgba(255,45,85,.13),transparent 38%),
-        #08080c !important;
-      padding-top:max(20px,calc(20px + env(safe-area-inset-top))) !important;
-    }
-    #create-screen .glass-card,
-    #profile-screen .glass-card { box-shadow:0 20px 55px rgba(0,0,0,.38); }
-    #live-title {
-      min-height:50px;
-      background:rgba(255,255,255,.055) !important;
-      border-color:rgba(255,255,255,.09) !important;
-    }
-
-    /* EMPTY / LOADING */
-    .empty-feed {
-      min-height:100dvh;
-      background:
-        radial-gradient(circle at 50% 38%,rgba(255,45,85,.06),transparent 35%),
-        #08080c;
-    }
-
-    /* ACCESSIBILITY / PERFORMANCE */
-    @media (prefers-reduced-motion:reduce) {
-      *,*::before,*::after {
-        animation-duration:.01ms !important;
-        animation-iteration-count:1 !important;
-        transition-duration:.01ms !important;
-        scroll-behavior:auto !important;
-      }
-    }
-
-    @media (max-width:360px) {
-      .side-icon { width:42px;height:42px;font-size:18px; }
-      #side-rail { right:8px;gap:10px; }
-      .feed-side { right:8px; }
-      .guest-tile { width:74px;height:98px; }
-      .fx-grid { gap:8px; }
-      .fx-preview { width:56px;height:56px;font-size:23px; }
-      .gift-grid { grid-template-columns:repeat(4,1fr);gap:7px; }
-      .gift-emoji { font-size:27px; }
-      .gift-item { min-height:80px;padding:8px 2px; }
-      .bottom-icon-btn { width:42px;height:42px; }
-    }
-
-    @media (min-width:768px) {
-      body { background:#050507; }
-      #feed-screen,#create-screen,#profile-screen,#live-stage,#bottom-nav {
-        box-shadow:0 0 60px rgba(0,0,0,.55);
-      }
     }
   </style>
 </head>
@@ -746,55 +487,102 @@
             <div class="host-avatar" id="host-avatar">H</div>
             <div>
               <p class="text-xs font-semibold leading-tight" id="host-name">Host</p>
-              <p class="text-[10px] text-zinc-300 leading-tight"><span id="viewer-count">0</span> watazamaji</p>
+              <p class="text-[10px] text-zinc-300 leading-tight"><span id="viewer-count">0</span> watazamaji · <span id="cohost-count">0</span>/8 co-host</p>
             </div>
           </div>
           <div class="live-badge">LIVE</div>
         </div>
         <div class="flex gap-2">
-          <button onclick="openPanel('viewers')" class="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-sm border border-white/10">👥</button>
-          <button onclick="copyLink()" class="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-sm border border-white/10">↗</button>
-          <button onclick="leaveRoom()" class="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-sm border border-white/10">✕</button>
+          <button onclick="openPanel('viewers')" class="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center border border-white/10" title="Viewers">
+            <svg class="icon-svg" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </button>
+          <button onclick="copyLink()" class="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center border border-white/10" title="Share">
+            <svg class="icon-svg" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          </button>
+          <button onclick="leaveRoom()" class="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center border border-white/10" title="Ondoka">
+            <svg class="icon-svg" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
         </div>
       </div>
 
-      <div id="host-bar">
-        <button class="host-ctrl" onclick="toggleMic()" id="btn-mic">🎤 Mic</button>
-        <button class="host-ctrl" onclick="toggleCam()" id="btn-cam">📷 Cam</button>
-        <button class="host-ctrl" onclick="toggleScreen()" id="btn-screen">🖥️ Screen</button>
-        <button class="host-ctrl" onclick="openPanel('filters')">✨ Filters</button>
-        <button class="host-ctrl" onclick="triggerUpload()">📤 Upload</button>
-        <button class="host-ctrl danger" onclick="endLive()">End Live</button>
+      <!-- Host hamburger menu (bottom left) -->
+      <div id="host-menu-wrap">
+        <div id="host-menu">
+          <button class="host-ctrl" onclick="toggleMic(); closeHostMenu()" id="btn-mic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            Mic
+          </button>
+          <button class="host-ctrl" onclick="toggleCam(); closeHostMenu()" id="btn-cam">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+            Camera
+          </button>
+          <button class="host-ctrl" onclick="toggleScreen(); closeHostMenu()" id="btn-screen">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            Screen
+          </button>
+          <button class="host-ctrl" onclick="openPanel('filters'); closeHostMenu()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            Filters
+          </button>
+          <button class="host-ctrl" onclick="triggerUpload(); closeHostMenu()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Upload
+          </button>
+          <button class="host-ctrl" onclick="toggleCohostRequests(); closeHostMenu()" id="btn-cohost-reqs">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+            Maombi
+            <span class="badge-count" id="req-badge" style="display:none">0</span>
+          </button>
+          <button class="host-ctrl danger" onclick="endLive(); closeHostMenu()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            End Live
+          </button>
+        </div>
+        <button id="host-burger" onclick="toggleHostMenu()" title="Host Menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
       </div>
 
-      <div id="request-toast">
-        <div class="flex-1">
-          <p class="text-sm font-semibold" id="request-user">User</p>
-          <p class="text-xs text-zinc-400">Anaomba kuungana (Co-host)</p>
+      <!-- Co-host requests list -->
+      <div id="cohost-requests">
+        <div class="flex justify-between items-center mb-3">
+          <p class="text-sm font-bold">Maombi ya Co-host</p>
+          <button onclick="closeCohostRequests()" class="text-zinc-400 text-xs">Funga</button>
         </div>
-        <button onclick="approveRequest()" class="px-3 py-1.5 bg-emerald-500 rounded-lg text-xs font-bold">Kubali</button>
-        <button onclick="rejectRequest()" class="px-3 py-1.5 bg-zinc-700 rounded-lg text-xs font-bold">Kataa</button>
+        <div id="cohost-req-list">
+          <p class="text-xs text-zinc-500 text-center py-4">Hakuna maombi</p>
+        </div>
       </div>
 
       <div id="side-rail">
         <button class="side-btn" onclick="sendLike()" id="btn-like">
-          <div class="side-icon">♡</div>
+          <div class="side-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          </div>
           <span class="side-label" id="like-count">0</span>
         </button>
         <button class="side-btn" onclick="openPanel('gifts')">
-          <div class="side-icon">🎁</div>
+          <div class="side-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+          </div>
           <span class="side-label">Gifts</span>
         </button>
         <button class="side-btn" onclick="openPanel('react')">
-          <div class="side-icon">😄</div>
+          <div class="side-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+          </div>
           <span class="side-label">React</span>
         </button>
-        <button class="side-btn" onclick="openPanel('filters')">
-          <div class="side-icon">✨</div>
+        <button class="side-btn" onclick="openPanel('filters')" id="btn-fx-side">
+          <div class="side-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
           <span class="side-label">Effects</span>
         </button>
         <button class="side-btn" id="btn-join-req" onclick="requestJoin()" style="display:none;">
-          <div class="side-icon">🙋</div>
+          <div class="side-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          </div>
           <span class="side-label">Join</span>
         </button>
       </div>
@@ -803,9 +591,15 @@
 
       <div id="bottom-bar">
         <input id="chat-input" placeholder="Andika ujumbe..." autocomplete="off" onkeydown="if(event.key==='Enter')sendChat()">
-        <button class="bottom-icon-btn" onclick="openPanel('gifts')">🎁</button>
-        <button class="bottom-icon-btn" onclick="openPanel('react')">😄</button>
-        <button class="bottom-icon-btn" onclick="sendChat()" style="background:linear-gradient(135deg,#ff2d55,#ff6b35);">➤</button>
+        <button class="bottom-icon-btn" onclick="openPanel('gifts')" title="Gifts">
+          <svg class="icon-svg" viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+        </button>
+        <button class="bottom-icon-btn" onclick="openPanel('react')" title="React">
+          <svg class="icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+        </button>
+        <button class="bottom-icon-btn" onclick="sendChat()" style="background:linear-gradient(135deg,#ff2d55,#ff6b35);" title="Tuma">
+          <svg class="icon-svg" viewBox="0 0 24 24" style="stroke:#fff"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
       </div>
 
       <div id="panel-filters" class="bottom-panel">
@@ -871,7 +665,9 @@
     let username = localStorage.getItem("username");
     let room = null, currentRoomId = null, isHost = false, hostIdentity = null;
     let likeCount = 0, mainVideoAttached = false, currentFilter = "none";
-    let pendingRequestUser = null;
+    let cohostRequests = []; // [{user}]
+    let cohostCount = 0;
+    const MAX_COHOSTS = 8;
 
     const GIFTS = [
       { id:"rose", emoji:"🌹", name:"Rose", price:1 },
@@ -1069,13 +865,17 @@
         document.getElementById("live-room").classList.remove("hidden");
 
         if (asHost) {
-          document.getElementById("host-bar").classList.add("show");
+          document.getElementById("host-menu-wrap").classList.add("show");
           document.getElementById("host-name").textContent = username;
           document.getElementById("host-avatar").textContent = username.charAt(0).toUpperCase();
+          // Host should NOT see Like button
+          const likeBtn = document.getElementById("btn-like");
+          if (likeBtn) likeBtn.style.display = "none";
           await room.localParticipant.enableCameraAndMicrophone();
           attachMainVideo(room.localParticipant);
         } else {
           document.getElementById("btn-join-req").style.display = "flex";
+          document.getElementById("btn-like").style.display = "flex";
           room.remoteParticipants.forEach(p => {
             p.videoTrackPublications.forEach(pub => { if (pub.track) attachMainVideo(p); });
           });
@@ -1226,7 +1026,8 @@
       likeCount++;
       document.getElementById("like-count").textContent = formatCount(likeCount);
       document.getElementById("btn-like").classList.add("liked");
-      document.querySelector("#btn-like .side-icon").textContent = "❤️";
+      const heartSvg = document.querySelector("#btn-like .side-icon svg");
+      if (heartSvg) { heartSvg.style.fill = "#ff2d55"; heartSvg.style.stroke = "#ff2d55"; }
       spawnHeart();
       if (room) room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({type:"like",count:likeCount})), {reliable:false});
     }
@@ -1270,18 +1071,18 @@
         else if (data.type === "reaction") spawnReaction(data.emoji);
         else if (data.type === "live_ended") showEnded();
         else if (data.type === "join_request" && isHost) {
-          pendingRequestUser = data.user;
-          document.getElementById("request-user").textContent = data.user;
-          document.getElementById("request-toast").classList.add("show");
+          if (!cohostRequests.find(r => r.user === data.user)) {
+            cohostRequests.push({ user: data.user });
+            renderCohostRequests();
+            addChat("", `🙋 ${data.user} anaomba kuwa Co-host`, true);
+          }
         }
         else if (data.type === "join_approved" && data.user === username) {
           addChat("", "✓ Umepokelewa kama Co-host! Camera inawaka...", true);
           document.getElementById("btn-join-req").style.display = "none";
-          // Enable camera + mic (token now allows publish)
           room.localParticipant.setCameraEnabled(true)
             .then(() => room.localParticipant.setMicrophoneEnabled(true))
             .then(() => {
-              // Small delay so tracks are published, then show local preview tile
               setTimeout(() => {
                 attachGuest(room.localParticipant);
                 addChat("", "✓ Sasa unaonekana kama Co-host", true);
@@ -1295,6 +1096,10 @@
         else if (data.type === "join_rejected" && data.user === username) {
           addChat("", "Ombi lako limekataliwa", true);
         }
+        else if (data.type === "cohost_count") {
+          cohostCount = data.count || 0;
+          document.getElementById("cohost-count").textContent = cohostCount;
+        }
         else if (data.type === "image_overlay" && data.url) {
           showImageOverlay(data.url.startsWith("http") ? data.url : API_URL + data.url);
         }
@@ -1303,21 +1108,74 @@
 
     function requestJoin() {
       if (!room || isHost) return;
+      if (cohostCount >= MAX_COHOSTS) {
+        addChat("", "Co-host slots zimejaa (max 8)", true);
+        return;
+      }
       room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({type:"join_request",user:username})), {reliable:true});
       addChat("", "Ombi limetumwa kwa Host...", true);
+      document.getElementById("btn-join-req").style.opacity = "0.5";
     }
-    function approveRequest() {
-      if (!pendingRequestUser || !room) return;
-      room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({type:"join_approved",user:pendingRequestUser})), {reliable:true});
-      addChat("", `✓ ${pendingRequestUser} amekubaliwa kama Co-host`, true);
-      document.getElementById("request-toast").classList.remove("show");
-      pendingRequestUser = null;
+
+    function approveRequest(user) {
+      if (!user || !room) return;
+      if (cohostCount >= MAX_COHOSTS) {
+        addChat("", "Tayari una Co-host 8 (max)", true);
+        return;
+      }
+      room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({type:"join_approved",user:user})), {reliable:true});
+      addChat("", `✓ ${user} amekubaliwa kama Co-host`, true);
+      cohostRequests = cohostRequests.filter(r => r.user !== user);
+      cohostCount++;
+      document.getElementById("cohost-count").textContent = cohostCount;
+      room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({type:"cohost_count",count:cohostCount})), {reliable:true});
+      renderCohostRequests();
     }
-    function rejectRequest() {
-      if (!pendingRequestUser || !room) return;
-      room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({type:"join_rejected",user:pendingRequestUser})), {reliable:true});
-      document.getElementById("request-toast").classList.remove("show");
-      pendingRequestUser = null;
+
+    function rejectRequest(user) {
+      if (!user || !room) return;
+      room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({type:"join_rejected",user:user})), {reliable:true});
+      cohostRequests = cohostRequests.filter(r => r.user !== user);
+      renderCohostRequests();
+    }
+
+    function renderCohostRequests() {
+      const list = document.getElementById("cohost-req-list");
+      const badge = document.getElementById("req-badge");
+      if (!cohostRequests.length) {
+        list.innerHTML = `<p class="text-xs text-zinc-500 text-center py-4">Hakuna maombi</p>`;
+        badge.style.display = "none";
+        return;
+      }
+      badge.style.display = "inline";
+      badge.textContent = cohostRequests.length;
+      list.innerHTML = cohostRequests.map(r => `
+        <div class="req-item">
+          <div class="req-av">${r.user.charAt(0).toUpperCase()}</div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium truncate">${esc(r.user)}</p>
+            <p class="text-[10px] text-zinc-400">Anaomba Co-host</p>
+          </div>
+          <div class="req-actions">
+            <button class="req-btn accept" onclick="approveRequest('${esc(r.user)}')">Kubali</button>
+            <button class="req-btn reject" onclick="rejectRequest('${esc(r.user)}')">Kataa</button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function toggleHostMenu() {
+      document.getElementById("host-menu").classList.toggle("open");
+    }
+    function closeHostMenu() {
+      document.getElementById("host-menu").classList.remove("open");
+    }
+    function toggleCohostRequests() {
+      document.getElementById("cohost-requests").classList.toggle("open");
+      renderCohostRequests();
+    }
+    function closeCohostRequests() {
+      document.getElementById("cohost-requests").classList.remove("open");
     }
 
     function triggerUpload() { document.getElementById("file-upload").click(); }
@@ -1371,13 +1229,11 @@
       if (!room) return;
       const on = room.localParticipant.isMicrophoneEnabled;
       room.localParticipant.setMicrophoneEnabled(!on);
-      document.getElementById("btn-mic").textContent = on ? "🔇 Mic" : "🎤 Mic";
     }
     function toggleCam() {
       if (!room) return;
       const on = room.localParticipant.isCameraEnabled;
       room.localParticipant.setCameraEnabled(!on);
-      document.getElementById("btn-cam").textContent = on ? "🚫 Cam" : "📷 Cam";
     }
     async function toggleScreen() {
       if (!room) return;
