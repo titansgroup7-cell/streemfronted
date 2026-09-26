@@ -972,6 +972,8 @@
     let pendingMeetTitle = "";
     let isMeeting = false;
     let meetScreenTrack = null;
+    // Stage: only these identities shown on grid (host always on stage)
+    let meetStage = new Set();
 
     function setCreateMode(mode) {
       createMode = mode;
@@ -1178,6 +1180,8 @@
       isHost = asHost;
       currentRoomId = roomId;
       hostIdentity = asHost ? username : null;
+      meetStage = new Set();
+      if (asHost) meetStage.add(username);
 
       // Hide everything else, show meet UI immediately
       document.getElementById("bottom-nav").classList.add("hidden");
@@ -1195,6 +1199,18 @@
         if (typeof stopAllFeedPreviews === "function") await stopAllFeedPreviews();
         if (room) { try { await room.disconnect(); } catch(_){} room = null; }
 
+        // Know who is host (for stage)
+        if (!asHost) {
+          try {
+            const ri = await fetch(`${API_URL}/rooms/${roomId}`);
+            if (ri.ok) {
+              const info = await ri.json();
+              hostIdentity = info.host_username || null;
+              if (hostIdentity) meetStage.add(hostIdentity);
+            }
+          } catch(_){}
+        }
+
         const res = await fetch(`${API_URL}/token`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
@@ -1204,13 +1220,26 @@
         if (handleAuthError(res, data)) return;
         if (!res.ok) { alert(data.detail || "Imeshindikana"); leaveMeeting(true); showTab("feed"); return; }
         if (!data.url || !data.token) { alert("LiveKit URL/token haipo"); leaveMeeting(true); showTab("feed"); return; }
+        if (data.host_username) {
+          hostIdentity = data.host_username;
+          meetStage.add(hostIdentity);
+        }
 
         room = new LivekitClient.Room({ adaptiveStream: true, dynacast: true });
         room.on(LivekitClient.RoomEvent.TrackSubscribed, meetTrackSubscribed);
         room.on(LivekitClient.RoomEvent.LocalTrackPublished, () => meetRefreshGrid());
         room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => { try { track.detach(); } catch(_){} });
-        room.on(LivekitClient.RoomEvent.ParticipantConnected, () => { meetRefreshGrid(); meetUpdateCount(); });
-        room.on(LivekitClient.RoomEvent.ParticipantDisconnected, () => { meetRefreshGrid(); meetUpdateCount(); });
+        room.on(LivekitClient.RoomEvent.ParticipantConnected, () => {
+          meetRefreshGrid();
+          meetUpdateCount();
+          if (isHost) setTimeout(broadcastStage, 300);
+        });
+        room.on(LivekitClient.RoomEvent.ParticipantDisconnected, (p) => {
+          if (p && meetStage.has(p.identity)) meetStage.delete(p.identity);
+          meetRefreshGrid();
+          meetUpdateCount();
+          if (isHost) broadcastStage();
+        });
         room.on(LivekitClient.RoomEvent.DataReceived, meetHandleData);
         room.on(LivekitClient.RoomEvent.Disconnected, () => { if (isMeeting) leaveMeeting(true); });
 
@@ -1324,20 +1353,74 @@
       meetRefreshGrid();
     }
 
+    function meetOnStage(identity) {
+      // Host always on stage; others only if selected
+      if (!identity) return false;
+      if (isHost && identity === username) return true;
+      if (hostIdentity && identity === hostIdentity) return true;
+      if (meetStage.size === 0) {
+        // Before stage list arrives: show only host (or self if host)
+        return identity === hostIdentity || (isHost && identity === username);
+      }
+      return meetStage.has(identity);
+    }
+
+    function broadcastStage() {
+      if (!room || !isHost) return;
+      const list = Array.from(meetStage);
+      room.localParticipant.publishData(
+        new TextEncoder().encode(JSON.stringify({ type: "meet_stage", list })),
+        { reliable: true }
+      );
+    }
+
+    function meetAddToStage(identity) {
+      if (!isHost || !identity) return;
+      meetStage.add(identity);
+      broadcastStage();
+      meetRefreshGrid();
+      renderMeetParticipants();
+    }
+
+    function meetRemoveFromStage(identity) {
+      if (!isHost || !identity) return;
+      // Never remove host
+      if (identity === username || identity === hostIdentity) return;
+      meetStage.delete(identity);
+      broadcastStage();
+      meetRefreshGrid();
+      renderMeetParticipants();
+    }
+
     function meetRefreshGrid() {
       if (!room) return;
       const grid = document.getElementById("meet-grid");
-      meetAttachVideo(room.localParticipant);
-      room.remoteParticipants.forEach(p => meetAttachVideo(p));
-      const ids = new Set([
-        meetTileId(room.localParticipant.identity),
-        ...Array.from(room.remoteParticipants.keys()).map(k => meetTileId(k))
-      ]);
+
+      // Ensure host in stage set
+      if (isHost) meetStage.add(username);
+      else if (hostIdentity) meetStage.add(hostIdentity);
+
+      // Attach only people on stage
+      const onStage = [];
+      if (meetOnStage(room.localParticipant.identity)) {
+        meetAttachVideo(room.localParticipant);
+        onStage.push(room.localParticipant.identity);
+      }
+      room.remoteParticipants.forEach(p => {
+        if (meetOnStage(p.identity)) {
+          meetAttachVideo(p);
+          onStage.push(p.identity);
+        }
+      });
+
+      // Remove tiles not on stage
+      const ids = new Set(onStage.map(meetTileId));
       Array.from(grid.children).forEach(child => {
         if (!ids.has(child.id)) child.remove();
       });
-      // Fit layout by participant count — no scroll
-      const n = Math.min(room.numParticipants || 1, 9);
+
+      // Layout by how many are ON STAGE (not total in room)
+      const n = Math.max(ids.size, 1);
       grid.className = "";
       grid.id = "meet-grid";
       if (n <= 1) grid.classList.add("n1");
@@ -1402,13 +1485,18 @@
       const people = [room.localParticipant, ...room.remoteParticipants.values()];
       list.innerHTML = people.map(p => {
         const isLocal = p === room.localParticipant;
+        const onStage = meetOnStage(p.identity);
+        const isHostPerson = isLocal && isHost;
         return `<div class="meet-p-item">
-          <span>${isLocal ? "Wewe (Host)" : esc(p.identity)}</span>
+          <span>${isLocal ? (isHost ? "Wewe (Host)" : "Wewe") : esc(p.identity)}${onStage ? " · 📺" : ""}</span>
           ${(!isLocal && isHost) ? `<div class="meet-p-actions">
-            <button class="meet-p-btn warn" onclick="meetMuteRemote('${esc(p.identity)}','audio')">Mute Mic</button>
-            <button class="meet-p-btn warn" onclick="meetMuteRemote('${esc(p.identity)}','video')">Stop Cam</button>
-            <button class="meet-p-btn warn" onclick="meetMuteRemote('${esc(p.identity)}','both')">Mute All</button>
-          </div>` : ""}
+            ${onStage
+              ? `<button class="meet-p-btn warn" onclick="meetRemoveFromStage('${esc(p.identity)}')">Ondoa screen</button>`
+              : `<button class="meet-p-btn" onclick="meetAddToStage('${esc(p.identity)}')" style="background:#0891b2">Onyesha screen</button>`
+            }
+            <button class="meet-p-btn warn" onclick="meetMuteRemote('${esc(p.identity)}','audio')">Mute</button>
+            <button class="meet-p-btn warn" onclick="meetMuteRemote('${esc(p.identity)}','video')">Cam off</button>
+          </div>` : (isHostPerson ? `<span class="text-[10px] text-zinc-500">Host · daima screen</span>` : "")}
         </div>`;
       }).join("");
     }
@@ -1434,6 +1522,11 @@
             document.getElementById("meet-btn-cam").classList.add("off");
             meetAttachVideo(room.localParticipant);
           }
+        }
+        if (data.type === "meet_stage" && Array.isArray(data.list)) {
+          meetStage = new Set(data.list);
+          if (hostIdentity) meetStage.add(hostIdentity);
+          meetRefreshGrid();
         }
       } catch (_) {}
     }
