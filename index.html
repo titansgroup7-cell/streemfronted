@@ -13,9 +13,12 @@
     /* FEED */
     #feed-screen {
       position: fixed; inset: 0; z-index: 10;
-      height: 100dvh; overflow-y: scroll; scroll-snap-type: y mandatory;
+      height: 100dvh; overflow-y: auto; overflow-x: hidden;
+      scroll-snap-type: y mandatory;
       background: #0a0a0f; padding-bottom: 70px;
+      scrollbar-width: none; /* Firefox */
     }
+    #feed-screen::-webkit-scrollbar { display: none; } /* Chrome/Safari */
     .feed-card {
       height: 100dvh; scroll-snap-align: start; position: relative;
       display: flex; align-items: center; justify-content: center;
@@ -330,8 +333,7 @@
         width: 100%;
       }
       #feed-screen, #create-screen, #profile-screen, #live-stage {
-        border-left: 1px solid #1a1a2e;
-        border-right: 1px solid #1a1a2e;
+        border: none !important;
       }
       #guest-rail { right: 12px; }
       #side-rail { right: 12px; }
