@@ -1129,14 +1129,31 @@
       updateViewerCount();
       refreshViewerList();
     }
-    function updateViewerCount() { if (room) document.getElementById("viewer-count").textContent = room.numParticipants; }
+    function updateViewerCount() {
+      if (!room) return;
+      const n = room.numParticipants || 0;
+      document.getElementById("viewer-count").textContent = n;
+      // Report real LiveKit count to backend (for feed)
+      if (currentRoomId && token) {
+        fetch(`${API_URL}/rooms/${currentRoomId}/viewers?count=${n}`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token}` }
+        }).catch(()=>{});
+      }
+    }
+    function endLiveOnServer(roomId) {
+      if (!roomId || !token) return;
+      fetch(`${API_URL}/rooms/${roomId}/end`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` },
+        keepalive: true
+      }).catch(()=>{});
+    }
     function showEnded() {
       document.getElementById("ended-overlay").classList.add("show");
       try { room?.disconnect(); } catch {}
       if (isHost && currentRoomId) {
-        fetch(`${API_URL}/rooms/${currentRoomId}/end`, {
-          method:"POST", headers:{"Authorization":`Bearer ${token}`}
-        }).catch(()=>{});
+        endLiveOnServer(currentRoomId);
       }
     }
     function backToFeed() {
@@ -1145,6 +1162,12 @@
       mainVideoAttached = false;
       showTab("feed");
     }
+
+    // Host closes tab → end live so it disappears from feed
+    window.addEventListener("beforeunload", () => {
+      if (isHost && currentRoomId) endLiveOnServer(currentRoomId);
+      if (typeof stopAllFeedPreviews === "function") stopAllFeedPreviews();
+    });
 
     function applyFilter(name, btn) {
       currentFilter = name;
