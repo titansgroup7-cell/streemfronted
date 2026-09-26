@@ -65,10 +65,12 @@
       background: none; border: none; color: #888; font-size: 11px; cursor: pointer;
     }
     .nav-item.active { color: #fff; }
-    .nav-item .nav-icon { font-size: 22px; }
+    .nav-item .nav-icon { display: flex; align-items: center; justify-content: center; }
+    .nav-item .nav-icon svg { width: 24px; height: 24px; }
 
     /* LIVE STAGE */
-    #live-stage { position: fixed; inset: 0; background: #000; z-index: 1; }
+    #live-room { position: fixed; inset: 0; z-index: 100; }
+    #live-stage { position: absolute; inset: 0; background: #000; z-index: 1; }
     #main-video { width: 100%; height: 100%; object-fit: cover; background: #111; transition: filter 0.35s ease; }
     #video-loading {
       position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
@@ -461,13 +463,22 @@
   <!-- BOTTOM NAV -->
   <div id="bottom-nav" class="hidden">
     <button class="nav-item active" onclick="showTab('feed')" id="nav-feed">
-      <span class="nav-icon">🏠</span> Home
+      <span class="nav-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      </span>
+      Home
     </button>
     <button class="nav-item" onclick="showTab('create')" id="nav-create">
-      <span class="nav-icon">➕</span> Live
+      <span class="nav-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      </span>
+      Live
     </button>
     <button class="nav-item" onclick="showTab('profile')" id="nav-profile">
-      <span class="nav-icon">👤</span> Profile
+      <span class="nav-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </span>
+      Profile
     </button>
   </div>
 
@@ -838,24 +849,65 @@
     }
 
     async function joinRoom(roomId, asHost=false) {
-      currentRoomId = roomId; isHost = asHost; hostIdentity = asHost ? username : null;
+      currentRoomId = roomId;
+      isHost = asHost;
+      hostIdentity = asHost ? username : null;
+      mainVideoAttached = false;
+      cohostCount = 0;
+      cohostRequests = [];
       document.getElementById("bottom-nav").classList.add("hidden");
+      document.getElementById("video-loading").style.display = "flex";
+
       try {
+        // Fetch room info to know true host username
+        if (!asHost) {
+          try {
+            const roomRes = await fetch(`${API_URL}/rooms/${roomId}`);
+            if (roomRes.ok) {
+              const roomInfo = await roomRes.json();
+              hostIdentity = roomInfo.host_username || null;
+              if (hostIdentity) {
+                document.getElementById("host-name").textContent = hostIdentity;
+                document.getElementById("host-avatar").textContent = hostIdentity.charAt(0).toUpperCase();
+              }
+            }
+          } catch (_) {}
+        }
+
         const res = await fetch(`${API_URL}/token`, {
-          method:"POST", headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
+          method:"POST",
+          headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
           body: JSON.stringify({ room_id: roomId, identity: username, role: asHost ? "host" : "viewer" })
         });
         const data = await res.json();
         if (handleAuthError(res, data)) return;
-        if (!res.ok) { alert("Imeshindikana: " + (data.detail||"")); showTab("feed"); return; }
+        if (!res.ok) {
+          alert("Imeshindikana: " + (data.detail || res.status));
+          showTab("feed");
+          return;
+        }
+        if (!data.url || !data.token) {
+          alert("Server haikutoa LiveKit URL/token. Angalia LIVEKIT settings.");
+          showTab("feed");
+          return;
+        }
 
-        room = new LivekitClient.Room({ adaptiveStream:true, dynacast:true });
+        if (room) { try { room.disconnect(); } catch(_){} room = null; }
+
+        room = new LivekitClient.Room({ adaptiveStream: true, dynacast: true });
         room.on(LivekitClient.RoomEvent.TrackSubscribed, handleTrackSubscribed);
-        room.on(LivekitClient.RoomEvent.TrackUnsubscribed, t => { if (t.kind==="video") t.detach(); });
-        room.on(LivekitClient.RoomEvent.ParticipantConnected, () => { updateViewerCount(); refreshViewerList(); });
+        room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
+          if (track.kind === "video") track.detach();
+        });
+        room.on(LivekitClient.RoomEvent.ParticipantConnected, () => {
+          updateViewerCount();
+          refreshViewerList();
+        });
         room.on(LivekitClient.RoomEvent.ParticipantDisconnected, onParticipantLeft);
         room.on(LivekitClient.RoomEvent.DataReceived, handleData);
-        room.on(LivekitClient.RoomEvent.Disconnected, () => { if (!isHost) showEnded(); });
+        room.on(LivekitClient.RoomEvent.Disconnected, () => {
+          if (!isHost) showEnded();
+        });
 
         await room.connect(data.url, data.token);
 
@@ -863,12 +915,12 @@
         document.getElementById("create-screen").classList.add("hidden");
         document.getElementById("profile-screen").classList.add("hidden");
         document.getElementById("live-room").classList.remove("hidden");
+        document.getElementById("bottom-nav").classList.add("hidden");
 
         if (asHost) {
           document.getElementById("host-menu-wrap").classList.add("show");
           document.getElementById("host-name").textContent = username;
           document.getElementById("host-avatar").textContent = username.charAt(0).toUpperCase();
-          // Host should NOT see Like button
           const likeBtn = document.getElementById("btn-like");
           if (likeBtn) likeBtn.style.display = "none";
           await room.localParticipant.enableCameraAndMicrophone();
@@ -876,38 +928,92 @@
         } else {
           document.getElementById("btn-join-req").style.display = "flex";
           document.getElementById("btn-like").style.display = "flex";
+          document.getElementById("host-menu-wrap").classList.remove("show");
+          // Attach any already-present remote tracks
           room.remoteParticipants.forEach(p => {
-            p.videoTrackPublications.forEach(pub => { if (pub.track) attachMainVideo(p); });
+            p.trackPublications.forEach(pub => {
+              if (pub.track) {
+                if (pub.track.kind === "video") {
+                  if (hostIdentity && p.identity === hostIdentity) {
+                    attachMainVideo(p);
+                  } else if (!hostIdentity && !mainVideoAttached) {
+                    attachMainVideo(p);
+                  } else {
+                    attachGuest(p);
+                  }
+                }
+                if (pub.track.kind === "audio") {
+                  pub.track.attach();
+                }
+              }
+            });
           });
         }
         updateViewerCount();
+        document.getElementById("cohost-count").textContent = cohostCount;
         renderGifts();
         renderReactions();
         refreshViewerList();
-      } catch (e) { console.error(e); alert("Hitilafu kuunganisha live"); showTab("feed"); }
+      } catch (e) {
+        console.error("Join error:", e);
+        alert("Hitilafu kuunganisha live: " + (e.message || e));
+        showTab("feed");
+      }
     }
 
     function attachMainVideo(participant) {
+      if (!participant) return;
       const videoEl = document.getElementById("main-video");
       const loading = document.getElementById("video-loading");
-      const videoPub = Array.from(participant.videoTrackPublications.values()).find(p => p.track && p.track.kind==="video");
-      if (videoPub?.track) {
-        videoPub.track.attach(videoEl);
-        videoEl.muted = (participant === room.localParticipant);
-        videoEl.play().catch(()=>{});
-        loading.style.display = "none";
-        mainVideoAttached = true;
-        if (!isHost) {
-          hostIdentity = participant.identity;
-          document.getElementById("host-name").textContent = participant.identity;
-          document.getElementById("host-avatar").textContent = participant.identity.charAt(0).toUpperCase();
+
+      let track = null;
+      participant.videoTrackPublications.forEach(pub => {
+        if (pub.track && pub.track.kind === "video" && !pub.track.isMuted) {
+          track = pub.track;
         }
-        applyFilter(currentFilter);
+      });
+      // fallback: any video track
+      if (!track) {
+        participant.videoTrackPublications.forEach(pub => {
+          if (pub.track && pub.track.kind === "video") track = pub.track;
+        });
       }
+      if (!track) return;
+
+      // Detach previous
+      try { videoEl.srcObject = null; } catch(_){}
+      track.attach(videoEl);
+      // Host/remote audio must not be muted; only mute local preview
+      videoEl.muted = (participant === room.localParticipant);
+      videoEl.playsInline = true;
+      videoEl.autoplay = true;
+      const playPromise = videoEl.play();
+      if (playPromise) playPromise.catch(() => {
+        // autoplay blocked — try muted then unmute
+        videoEl.muted = true;
+        videoEl.play().then(() => {
+          if (participant !== room.localParticipant) videoEl.muted = false;
+        }).catch(()=>{});
+      });
+
+      loading.style.display = "none";
+      mainVideoAttached = true;
+
+      if (!isHost && participant.identity) {
+        hostIdentity = participant.identity;
+        document.getElementById("host-name").textContent = participant.identity;
+        document.getElementById("host-avatar").textContent = participant.identity.charAt(0).toUpperCase();
+      }
+      applyFilter(currentFilter);
     }
+
     function attachGuest(participant) {
-      if (participant.identity === hostIdentity) return;
-      // Host already has main video — don't put host in guest rail
+      if (!participant) return;
+      if (hostIdentity && participant.identity === hostIdentity) {
+        // This is the host — put on main, not guest rail
+        attachMainVideo(participant);
+        return;
+      }
       if (participant === room.localParticipant && isHost) return;
 
       let tile = document.getElementById(`guest-${participant.identity}`);
@@ -922,27 +1028,29 @@
         document.getElementById("guest-rail").appendChild(tile);
       }
       const vid = tile.querySelector("video");
-      // Attach any existing video tracks
       participant.videoTrackPublications.forEach(pub => {
         if (pub.track && pub.track.kind === "video") {
           pub.track.attach(vid);
-          vid.muted = true; // avoid echo
+          vid.muted = true;
           vid.play().catch(()=>{});
         }
       });
     }
+
     function handleTrackSubscribed(track, publication, participant) {
       if (track.kind === "video") {
-        // Host / main stream
-        if (!mainVideoAttached || participant.identity === hostIdentity) {
+        const isHostTrack = hostIdentity
+          ? (participant.identity === hostIdentity)
+          : (!mainVideoAttached);
+
+        if (isHostTrack || !mainVideoAttached) {
           attachMainVideo(participant);
         } else {
-          // Co-host or other publisher
           attachGuest(participant);
         }
       }
       if (track.kind === "audio" && participant !== room.localParticipant) {
-        track.attach();
+        track.attach(); // play host/cohost audio
       }
       updateViewerCount();
     }
