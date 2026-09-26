@@ -373,20 +373,22 @@
 
     /* ===== MEETING ROOM ===== */
     #meet-room {
-      position: fixed; inset: 0; z-index: 100;
+      position: fixed; inset: 0; z-index: 200;
       background: #0b0b12; display: flex; flex-direction: column;
+      pointer-events: auto;
     }
+    #meet-room.hidden { display: none !important; }
     #meet-grid {
-      flex: 1; display: grid; gap: 8px; padding: 60px 8px 100px;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      align-content: center; overflow-y: auto;
+      flex: 1; display: grid; gap: 8px; padding: 60px 8px 110px;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      align-content: center; overflow-y: auto; min-height: 0;
     }
     @media (min-width: 768px) {
-      #meet-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); padding: 70px 16px 110px; gap: 12px; }
+      #meet-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); padding: 70px 16px 120px; gap: 12px; max-width: 1200px; margin: 0 auto; width: 100%; }
     }
     .meet-tile {
       position: relative; border-radius: 16px; overflow: hidden;
-      background: #16161f; aspect-ratio: 16/10;
+      background: #16161f; aspect-ratio: 16/10; min-height: 140px;
       border: 2px solid transparent;
     }
     .meet-tile.speaking { border-color: #22c55e; }
@@ -405,9 +407,10 @@
       background: linear-gradient(135deg, #1e3a5f, #312e81);
     }
     #meet-top {
-      position: absolute; top: 0; left: 0; right: 0; z-index: 20;
+      position: absolute; top: 0; left: 0; right: 0; z-index: 50;
       display: flex; justify-content: space-between; align-items: center;
       padding: 12px 14px; background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent);
+      pointer-events: auto;
     }
     .meet-badge {
       background: #0891b2; font-size: 10px; font-weight: 800;
@@ -420,16 +423,19 @@
     }
     .meet-icon-btn.danger { background: rgba(239,68,68,0.3); color: #fca5a5; }
     #meet-controls {
-      position: absolute; bottom: 0; left: 0; right: 0; z-index: 20;
+      position: absolute; bottom: 0; left: 0; right: 0; z-index: 50;
       display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;
-      padding: 14px 12px 24px;
-      background: linear-gradient(to top, rgba(0,0,0,0.85), transparent);
+      padding: 14px 12px 28px;
+      background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+      pointer-events: auto;
     }
     .meet-ctrl {
       display: flex; flex-direction: column; align-items: center; gap: 4px;
-      min-width: 64px; padding: 10px 12px; border-radius: 16px; border: none; cursor: pointer;
-      background: rgba(255,255,255,0.1); color: #fff; font-size: 10px; font-weight: 600;
+      min-width: 64px; padding: 12px 14px; border-radius: 16px; border: none; cursor: pointer;
+      background: rgba(255,255,255,0.12); color: #fff; font-size: 10px; font-weight: 600;
+      pointer-events: auto; -webkit-tap-highlight-color: transparent;
     }
+    .meet-ctrl:active { transform: scale(0.95); background: rgba(255,255,255,0.2); }
     .meet-ctrl.off { background: rgba(239,68,68,0.35); color: #fca5a5; }
     .meet-ctrl.danger { background: rgba(239,68,68,0.5); }
     .meet-ctrl.active { background: rgba(34,211,238,0.3); color: #67e8f9; }
@@ -1160,11 +1166,18 @@
       isHost = asHost;
       currentRoomId = roomId;
       hostIdentity = asHost ? username : null;
+
+      // Hide everything else, show meet UI immediately
       document.getElementById("bottom-nav").classList.add("hidden");
       document.getElementById("feed-screen").classList.add("hidden");
       document.getElementById("create-screen").classList.add("hidden");
       document.getElementById("profile-screen").classList.add("hidden");
       document.getElementById("live-room").classList.add("hidden");
+      document.getElementById("meet-room").classList.remove("hidden");
+      document.getElementById("meet-title-label").textContent = title || "Mkutano";
+      document.getElementById("meet-grid").innerHTML = "";
+      document.getElementById("meet-btn-manage").classList.toggle("hidden", !asHost);
+      document.querySelectorAll(".host-only").forEach(el => el.classList.toggle("hidden", !asHost));
 
       try {
         if (typeof stopAllFeedPreviews === "function") await stopAllFeedPreviews();
@@ -1173,50 +1186,63 @@
         const res = await fetch(`${API_URL}/token`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-          body: JSON.stringify({ room_id: roomId, identity: username, role: asHost ? "host" : "viewer" })
+          body: JSON.stringify({ room_id: roomId, identity: username, role: asHost ? "host" : "cohost" })
         });
         const data = await res.json();
         if (handleAuthError(res, data)) return;
-        if (!res.ok) { alert(data.detail || "Imeshindikana"); showTab("feed"); return; }
+        if (!res.ok) { alert(data.detail || "Imeshindikana"); leaveMeeting(true); showTab("feed"); return; }
+        if (!data.url || !data.token) { alert("LiveKit URL/token haipo"); leaveMeeting(true); showTab("feed"); return; }
 
         room = new LivekitClient.Room({ adaptiveStream: true, dynacast: true });
         room.on(LivekitClient.RoomEvent.TrackSubscribed, meetTrackSubscribed);
-        room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => track.detach());
+        room.on(LivekitClient.RoomEvent.LocalTrackPublished, () => meetRefreshGrid());
+        room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => { try { track.detach(); } catch(_){} });
         room.on(LivekitClient.RoomEvent.ParticipantConnected, () => { meetRefreshGrid(); meetUpdateCount(); });
         room.on(LivekitClient.RoomEvent.ParticipantDisconnected, () => { meetRefreshGrid(); meetUpdateCount(); });
         room.on(LivekitClient.RoomEvent.DataReceived, meetHandleData);
         room.on(LivekitClient.RoomEvent.Disconnected, () => { if (isMeeting) leaveMeeting(true); });
 
         await room.connect(data.url, data.token);
-        await room.localParticipant.setCameraEnabled(true);
-        await room.localParticipant.setMicrophoneEnabled(true);
 
-        document.getElementById("meet-room").classList.remove("hidden");
-        document.getElementById("meet-title-label").textContent = title;
-        document.getElementById("meet-btn-manage").classList.toggle("hidden", !asHost);
-        document.querySelectorAll(".host-only").forEach(el => el.classList.toggle("hidden", !asHost));
+        // Show local tile immediately (even before camera)
+        meetRefreshGrid();
+        meetUpdateCount();
 
-        // Shareable link
+        try {
+          await room.localParticipant.enableCameraAndMicrophone();
+        } catch (camErr) {
+          console.warn("Camera/mic:", camErr);
+          try {
+            await room.localParticipant.setMicrophoneEnabled(true);
+          } catch(_){}
+          try {
+            await room.localParticipant.setCameraEnabled(true);
+          } catch(_){}
+        }
+
+        // Attach local video after publish
+        setTimeout(() => { meetRefreshGrid(); meetUpdateCount(); }, 500);
+        setTimeout(() => { meetRefreshGrid(); meetUpdateCount(); }, 1500);
+
         const link = `${location.origin}${location.pathname}?meet=${roomId}`;
         const linkInput = document.getElementById("meet-link-input");
         if (linkInput) linkInput.value = link;
         pendingMeetRoomId = roomId;
-
-        meetRefreshGrid();
-        meetUpdateCount();
       } catch (e) {
         console.error(e);
         alert("Hitilafu kuingia mkutano: " + (e.message || e));
         isMeeting = false;
+        document.getElementById("meet-room").classList.add("hidden");
         showTab("feed");
       }
     }
 
     function meetTileId(identity) {
-      return "meet-tile-" + identity.replace(/[^a-zA-Z0-9_-]/g, "_");
+      return "meet-tile-" + String(identity || "x").replace(/[^a-zA-Z0-9_-]/g, "_");
     }
 
     function meetEnsureTile(participant) {
+      if (!participant || !room) return null;
       const id = meetTileId(participant.identity);
       let tile = document.getElementById(id);
       if (!tile) {
@@ -1224,28 +1250,31 @@
         tile.id = id;
         tile.className = "meet-tile" + (participant === room.localParticipant ? " local" : "");
         const initial = (participant.identity || "?").charAt(0).toUpperCase();
+        const label = participant === room.localParticipant ? "Wewe" : esc(participant.identity);
         tile.innerHTML = `
           <div class="meet-tile-placeholder">${initial}</div>
-          <video autoplay playsinline ${participant === room.localParticipant ? "muted" : ""}></video>
-          <div class="meet-tile-label">
-            <span>${participant === room.localParticipant ? "Wewe" : esc(participant.identity)}</span>
-            <span class="muted-icon" style="display:none">Mic off</span>
-          </div>`;
+          <video autoplay playsinline muted></video>
+          <div class="meet-tile-label"><span>${label}</span></div>`;
         document.getElementById("meet-grid").appendChild(tile);
       }
       return tile;
     }
 
     function meetAttachVideo(participant) {
+      if (!participant || !room) return;
       const tile = meetEnsureTile(participant);
+      if (!tile) return;
       const vid = tile.querySelector("video");
       const ph = tile.querySelector(".meet-tile-placeholder");
       let hasVideo = false;
       participant.videoTrackPublications.forEach(pub => {
         if (pub.track && pub.track.kind === "video") {
-          pub.track.attach(vid);
-          vid.play().catch(()=>{});
-          hasVideo = true;
+          try {
+            pub.track.attach(vid);
+            vid.muted = (participant === room.localParticipant);
+            vid.play().catch(()=>{});
+            hasVideo = true;
+          } catch(_){}
         }
       });
       if (ph) ph.style.display = hasVideo ? "none" : "flex";
@@ -1254,17 +1283,17 @@
 
     function meetTrackSubscribed(track, publication, participant) {
       if (track.kind === "video") meetAttachVideo(participant);
-      if (track.kind === "audio" && participant !== room.localParticipant) track.attach();
+      if (track.kind === "audio" && participant !== room.localParticipant) {
+        try { track.attach(); } catch(_){}
+      }
       meetUpdateCount();
     }
 
     function meetRefreshGrid() {
       if (!room) return;
-      const grid = document.getElementById("meet-grid");
-      // Local first
       meetAttachVideo(room.localParticipant);
       room.remoteParticipants.forEach(p => meetAttachVideo(p));
-      // Remove tiles for people who left
+      const grid = document.getElementById("meet-grid");
       const ids = new Set([
         meetTileId(room.localParticipant.identity),
         ...Array.from(room.remoteParticipants.keys()).map(k => meetTileId(k))
@@ -1276,21 +1305,22 @@
 
     function meetUpdateCount() {
       if (!room) return;
-      document.getElementById("meet-count").textContent = room.numParticipants;
+      const n = room.numParticipants || 1;
+      document.getElementById("meet-count").textContent = n;
     }
 
     function meetToggleMic() {
-      if (!room) return;
+      if (!room) { alert("Bado haijaunganishwa"); return; }
       const on = room.localParticipant.isMicrophoneEnabled;
       room.localParticipant.setMicrophoneEnabled(!on);
       document.getElementById("meet-btn-mic").classList.toggle("off", on);
     }
     function meetToggleCam() {
-      if (!room) return;
+      if (!room) { alert("Bado haijaunganishwa"); return; }
       const on = room.localParticipant.isCameraEnabled;
       room.localParticipant.setCameraEnabled(!on).then(() => {
-        meetAttachVideo(room.localParticipant);
-      });
+        setTimeout(() => meetAttachVideo(room.localParticipant), 300);
+      }).catch(e => alert("Camera: " + (e.message || e)));
       document.getElementById("meet-btn-cam").classList.toggle("off", on);
     }
     async function meetToggleScreen() {
