@@ -3,395 +3,506 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Live Stream</title>
+  <title>LiveStream Pro</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
   <style>
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    body { background: #000; margin: 0; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
+    body { background: #0a0a0f; color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; overflow: hidden; }
     
-    /* TikTok-style full screen video */
-    #main-video-container {
-      position: absolute;
-      inset: 0;
-      background: #000;
-      z-index: 1;
+    /* ========== MAIN VIDEO ========== */
+    #live-stage {
+      position: fixed; inset: 0; background: #000; z-index: 1;
     }
-    #main-video-container video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      background: #111;
+    #main-video {
+      width: 100%; height: 100%; object-fit: cover; background: #111;
+      transition: filter 0.3s ease;
     }
-    
-    /* Guest videos - small floating tiles */
-    #guest-videos {
-      position: absolute;
-      top: 80px;
-      right: 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      z-index: 20;
-      max-height: 50vh;
-      overflow-y: auto;
+    #video-loading {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      background: radial-gradient(circle at center, #1a1a2e 0%, #0a0a0f 100%);
+      z-index: 2;
     }
-    .guest-tile {
-      width: 90px;
-      height: 120px;
-      border-radius: 12px;
-      overflow: hidden;
-      background: #222;
-      border: 2px solid rgba(255,255,255,0.3);
-      position: relative;
-      flex-shrink: 0;
-    }
-    .guest-tile video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    .guest-name {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: linear-gradient(transparent, rgba(0,0,0,0.8));
-      font-size: 10px;
-      padding: 4px 6px;
-      text-align: center;
-      color: #fff;
-    }
-
-    /* Overlay UI */
-    .overlay { position: absolute; z-index: 30; pointer-events: none; }
-    .overlay > * { pointer-events: auto; }
-
-    /* Right side actions (TikTok style) */
-    #side-actions {
-      position: absolute;
-      right: 12px;
-      bottom: 140px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 18px;
-      z-index: 40;
-    }
-    .action-btn {
-      width: 48px;
-      height: 48px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.15);
-      backdrop-filter: blur(10px);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 22px;
-      border: none;
-      cursor: pointer;
-      transition: transform 0.15s;
-    }
-    .action-btn:active { transform: scale(0.9); }
-    .action-label {
-      font-size: 11px;
-      margin-top: 2px;
-      font-weight: 600;
-      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
-    }
-    .liked { color: #fe2c55; }
-
-    /* Floating chat */
-    #chat-container {
-      position: absolute;
-      left: 10px;
-      bottom: 90px;
-      width: min(280px, 70vw);
-      max-height: 35vh;
-      overflow-y: auto;
-      z-index: 35;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 100%);
-      -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 100%);
-      scrollbar-width: none;
-    }
-    #chat-container::-webkit-scrollbar { display: none; }
-    .chat-msg {
-      background: rgba(0,0,0,0.45);
-      backdrop-filter: blur(8px);
-      padding: 6px 10px;
-      border-radius: 12px;
-      font-size: 13px;
-      line-height: 1.3;
-      color: #fff;
-      word-break: break-word;
-      animation: fadeIn 0.25s ease;
-    }
-    .chat-msg b { color: #25f4ee; font-weight: 600; }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(8px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    /* Bottom bar */
-    #bottom-bar {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      padding: 10px 12px 16px;
-      background: linear-gradient(transparent, rgba(0,0,0,0.7));
-      z-index: 50;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    #chat-input {
-      flex: 1;
-      background: rgba(255,255,255,0.12);
-      border: 1px solid rgba(255,255,255,0.2);
-      border-radius: 24px;
-      padding: 10px 16px;
-      color: white;
-      font-size: 14px;
-      outline: none;
-    }
-    #chat-input::placeholder { color: rgba(255,255,255,0.5); }
-
-    /* Top bar */
-    #top-bar {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      padding: 12px 14px;
-      background: linear-gradient(rgba(0,0,0,0.6), transparent);
-      z-index: 50;
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-    }
-
-    /* Host controls panel */
-    #host-panel {
-      position: absolute;
-      top: 70px;
-      left: 10px;
-      background: rgba(0,0,0,0.7);
-      backdrop-filter: blur(12px);
-      border-radius: 14px;
-      padding: 12px;
-      z-index: 40;
-      max-width: 200px;
-      display: none;
-    }
-    #host-panel.show { display: block; }
-
-    /* Live ended overlay */
-    #live-ended {
-      position: absolute;
-      inset: 0;
-      background: rgba(0,0,0,0.85);
-      z-index: 100;
-      display: none;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      padding: 20px;
-    }
-    #live-ended.show { display: flex; }
-
-    /* Desktop adjustments */
-    @media (min-width: 768px) {
-      #main-video-container {
-        left: 50%;
-        transform: translateX(-50%);
-        max-width: 420px;
-        border-radius: 0;
-      }
-      #guest-videos {
-        right: calc(50% - 210px - 110px);
-      }
-      #side-actions {
-        right: calc(50% - 210px + 20px);
-      }
-      #chat-container {
-        left: calc(50% - 210px + 12px);
-        width: 260px;
-      }
-      #bottom-bar {
-        left: 50%;
-        transform: translateX(-50%);
-        max-width: 420px;
-        width: 100%;
-      }
-      #top-bar {
-        left: 50%;
-        transform: translateX(-50%);
-        max-width: 420px;
-        width: 100%;
-      }
-    }
-
-    /* Loading spinner */
     .spinner {
-      width: 40px; height: 40px;
-      border: 3px solid rgba(255,255,255,0.2);
-      border-top-color: #fe2c55;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+      width: 48px; height: 48px; border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: #ff2d55; border-radius: 50%; animation: spin 0.7s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* Auth & Dashboard screens */
-    .screen { min-height: 100vh; display: flex; flex-direction: column; }
+    /* ========== GUEST TILES ========== */
+    #guest-rail {
+      position: absolute; top: 90px; right: 10px; display: flex; flex-direction: column;
+      gap: 8px; z-index: 25; max-height: 45vh; overflow-y: auto; scrollbar-width: none;
+    }
+    #guest-rail::-webkit-scrollbar { display: none; }
+    .guest-tile {
+      width: 86px; height: 114px; border-radius: 14px; overflow: hidden;
+      background: #1a1a2e; border: 2px solid rgba(255,255,255,0.25);
+      position: relative; flex-shrink: 0; box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+    .guest-tile video { width: 100%; height: 100%; object-fit: cover; }
+    .guest-name {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: linear-gradient(transparent, rgba(0,0,0,0.85));
+      font-size: 10px; padding: 5px 4px 4px; text-align: center; font-weight: 500;
+    }
+
+    /* ========== TOP BAR ========== */
+    #top-bar {
+      position: absolute; top: 0; left: 0; right: 0; z-index: 40;
+      padding: 12px 14px 20px;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.65) 0%, transparent 100%);
+      display: flex; justify-content: space-between; align-items: flex-start;
+    }
+    .host-pill {
+      display: flex; align-items: center; gap: 8px;
+      background: rgba(0,0,0,0.45); backdrop-filter: blur(16px);
+      border-radius: 50px; padding: 4px 12px 4px 4px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .host-avatar {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: linear-gradient(135deg, #ff2d55, #ff6b35);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 14px;
+    }
+    .live-badge {
+      background: linear-gradient(90deg, #ff2d55, #ff4757);
+      font-size: 10px; font-weight: 800; letter-spacing: 0.5px;
+      padding: 3px 8px; border-radius: 6px; animation: pulse-live 1.5s infinite;
+    }
+    @keyframes pulse-live {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.75; }
+    }
+
+    /* ========== SIDE ACTIONS ========== */
+    #side-rail {
+      position: absolute; right: 12px; bottom: 160px; z-index: 40;
+      display: flex; flex-direction: column; align-items: center; gap: 16px;
+    }
+    .side-btn {
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      background: none; border: none; color: #fff; cursor: pointer;
+    }
+    .side-icon {
+      width: 48px; height: 48px; border-radius: 50%;
+      background: rgba(255,255,255,0.12); backdrop-filter: blur(12px);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; border: 1px solid rgba(255,255,255,0.15);
+      transition: transform 0.15s, background 0.2s;
+    }
+    .side-btn:active .side-icon { transform: scale(0.88); }
+    .side-label { font-size: 11px; font-weight: 600; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
+    .liked .side-icon { background: rgba(255,45,85,0.3); color: #ff2d55; }
+
+    /* ========== FLOATING CHAT ========== */
+    #chat-float {
+      position: absolute; left: 12px; bottom: 100px; width: min(270px, 68vw);
+      max-height: 32vh; overflow-y: auto; z-index: 35;
+      display: flex; flex-direction: column; gap: 5px;
+      mask-image: linear-gradient(to bottom, transparent 0%, #000 12%, #000 100%);
+      -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 12%, #000 100%);
+      scrollbar-width: none;
+    }
+    #chat-float::-webkit-scrollbar { display: none; }
+    .chat-bubble {
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(10px);
+      padding: 7px 12px; border-radius: 14px; font-size: 13px; line-height: 1.35;
+      animation: chatIn 0.28s ease; word-break: break-word;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .chat-bubble b { color: #25f4ee; font-weight: 600; }
+    @keyframes chatIn {
+      from { opacity: 0; transform: translateY(10px) scale(0.96); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* ========== BOTTOM BAR ========== */
+    #bottom-bar {
+      position: absolute; bottom: 0; left: 0; right: 0; z-index: 50;
+      padding: 10px 12px 18px;
+      background: linear-gradient(to top, rgba(0,0,0,0.75) 0%, transparent 100%);
+      display: flex; align-items: center; gap: 8px;
+    }
+    #chat-input {
+      flex: 1; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 28px; padding: 11px 18px; color: #fff; font-size: 14px; outline: none;
+    }
+    #chat-input::placeholder { color: rgba(255,255,255,0.45); }
+    .bottom-icon-btn {
+      width: 44px; height: 44px; border-radius: 50%; border: none;
+      background: rgba(255,255,255,0.12); color: #fff; font-size: 18px;
+      display: flex; align-items: center; justify-content: center; cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    /* ========== PANELS (Filters / Gifts / Effects) ========== */
+    .bottom-panel {
+      position: absolute; bottom: 0; left: 0; right: 0; z-index: 60;
+      background: linear-gradient(to top, #0f0f18 0%, #161622 100%);
+      border-radius: 22px 22px 0 0; padding: 16px 16px 28px;
+      transform: translateY(110%); transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+      border-top: 1px solid rgba(255,255,255,0.08);
+      max-height: 55vh; overflow-y: auto;
+    }
+    .bottom-panel.open { transform: translateY(0); }
+    .panel-handle {
+      width: 40px; height: 4px; background: rgba(255,255,255,0.25);
+      border-radius: 4px; margin: 0 auto 14px;
+    }
+    .panel-title {
+      font-size: 15px; font-weight: 700; margin-bottom: 14px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .panel-close {
+      width: 28px; height: 28px; border-radius: 50%; background: rgba(255,255,255,0.1);
+      border: none; color: #fff; font-size: 14px; cursor: pointer;
+    }
+
+    /* Filter / Effect grid */
+    .fx-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+    }
+    .fx-item {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      cursor: pointer; border: none; background: none; color: #fff;
+    }
+    .fx-preview {
+      width: 64px; height: 64px; border-radius: 16px;
+      background: #1e1e2e; border: 2px solid transparent;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 26px; transition: all 0.2s;
+      overflow: hidden; position: relative;
+    }
+    .fx-item.active .fx-preview {
+      border-color: #ff2d55; box-shadow: 0 0 0 2px rgba(255,45,85,0.3);
+    }
+    .fx-item span { font-size: 11px; font-weight: 500; opacity: 0.85; }
+
+    /* Gift grid */
+    .gift-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+    }
+    .gift-item {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      padding: 10px 4px; border-radius: 14px; background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.06); cursor: pointer; transition: all 0.2s;
+    }
+    .gift-item:active { transform: scale(0.93); background: rgba(255,45,85,0.15); }
+    .gift-emoji { font-size: 32px; }
+    .gift-name { font-size: 11px; font-weight: 500; }
+    .gift-price { font-size: 10px; color: #ffd700; }
+
+    /* ========== GIFT ANIMATION ========== */
+    #gift-layer {
+      position: absolute; inset: 0; z-index: 45; pointer-events: none; overflow: hidden;
+    }
+    .flying-gift {
+      position: absolute; font-size: 64px;
+      animation: giftFly 2.8s ease-out forwards;
+    }
+    @keyframes giftFly {
+      0% { opacity: 0; transform: translateY(80px) scale(0.3); }
+      15% { opacity: 1; transform: translateY(0) scale(1.2); }
+      70% { opacity: 1; transform: translateY(-40px) scale(1); }
+      100% { opacity: 0; transform: translateY(-120px) scale(0.8); }
+    }
+    .gift-banner {
+      position: absolute; left: 12px; top: 100px;
+      background: linear-gradient(90deg, rgba(255,45,85,0.9), rgba(255,107,53,0.9));
+      padding: 8px 16px; border-radius: 30px; font-size: 13px; font-weight: 600;
+      display: flex; align-items: center; gap: 8px;
+      animation: bannerIn 3.5s ease forwards; z-index: 46;
+      box-shadow: 0 4px 20px rgba(255,45,85,0.4);
+    }
+    @keyframes bannerIn {
+      0% { opacity: 0; transform: translateX(-40px); }
+      10% { opacity: 1; transform: translateX(0); }
+      80% { opacity: 1; }
+      100% { opacity: 0; transform: translateX(-20px); }
+    }
+
+    /* ========== HEARTS ========== */
+    #hearts-layer {
+      position: absolute; right: 70px; bottom: 180px; z-index: 30; pointer-events: none;
+    }
+    .float-heart {
+      position: absolute; font-size: 28px;
+      animation: heartUp 2.2s ease-out forwards;
+    }
+    @keyframes heartUp {
+      0% { opacity: 1; transform: translateY(0) scale(0.6) rotate(0deg); }
+      100% { opacity: 0; transform: translateY(-180px) scale(1.1) rotate(25deg); }
+    }
+
+    /* ========== HOST CONTROLS ========== */
+    #host-bar {
+      position: absolute; top: 70px; left: 12px; z-index: 40;
+      display: none; gap: 6px; flex-wrap: wrap; max-width: 220px;
+    }
+    #host-bar.show { display: flex; }
+    .host-ctrl {
+      padding: 7px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
+      background: rgba(0,0,0,0.55); backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.12); color: #fff; cursor: pointer;
+    }
+    .host-ctrl.danger { background: rgba(255,45,85,0.7); border-color: transparent; }
+
+    /* ========== LIVE ENDED ========== */
+    #ended-overlay {
+      position: absolute; inset: 0; z-index: 100;
+      background: radial-gradient(circle at center, #1a1a2e 0%, #0a0a0f 100%);
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; padding: 24px;
+    }
+    #ended-overlay.show { display: flex; }
+
+    /* ========== AUTH / DASHBOARD ========== */
+    .screen { min-height: 100dvh; display: flex; flex-direction: column; }
+    .glass-card {
+      background: rgba(22,22,34,0.95); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 24px; backdrop-filter: blur(20px);
+    }
+
+    /* Desktop centering */
+    @media (min-width: 768px) {
+      #live-stage {
+        left: 50%; transform: translateX(-50%);
+        max-width: 430px; border-left: 1px solid #1a1a2e; border-right: 1px solid #1a1a2e;
+      }
+      #guest-rail { right: calc(50% - 215px - 100px); }
+      #side-rail { right: calc(50% - 215px + 16px); }
+      #chat-float { left: calc(50% - 215px + 14px); }
+      #bottom-bar, #top-bar, .bottom-panel {
+        left: 50%; transform: translateX(-50%);
+        max-width: 430px; width: 100%;
+      }
+      .bottom-panel.open { transform: translateX(-50%) translateY(0); }
+      .bottom-panel { transform: translateX(-50%) translateY(110%); }
+    }
   </style>
 </head>
-<body class="text-white">
+<body>
 
-  <!-- ==================== AUTH SCREEN ==================== -->
-  <div id="auth-screen" class="screen items-center justify-center p-4 bg-black">
-    <div class="bg-zinc-900 p-7 rounded-3xl w-full max-w-sm shadow-2xl border border-zinc-800">
-      <div class="text-center mb-7">
-        <div class="text-4xl mb-2">🔴</div>
-        <h1 class="text-2xl font-bold">Live Stream</h1>
-        <p class="text-zinc-400 text-sm mt-1">Ingia au jisajili kuendelea</p>
+  <!-- ==================== AUTH ==================== -->
+  <div id="auth-screen" class="screen items-center justify-center p-5" style="background: radial-gradient(ellipse at top, #1a1a2e 0%, #0a0a0f 70%);">
+    <div class="glass-card p-8 w-full max-w-sm">
+      <div class="text-center mb-8">
+        <div class="text-5xl mb-3">✦</div>
+        <h1 class="text-2xl font-bold tracking-tight">LiveStream Pro</h1>
+        <p class="text-zinc-400 text-sm mt-1">Live yenye filters, gifts & effects</p>
       </div>
-      
-      <div class="flex gap-2 mb-5 bg-zinc-800 p-1 rounded-xl">
-        <button onclick="showLogin()" id="btn-login" class="flex-1 py-2.5 rounded-lg bg-pink-600 font-medium text-sm transition">Ingia</button>
-        <button onclick="showRegister()" id="btn-register" class="flex-1 py-2.5 rounded-lg text-zinc-400 font-medium text-sm transition">Jisajili</button>
+      <div class="flex gap-1 mb-6 bg-zinc-900/80 p-1 rounded-2xl">
+        <button onclick="showLogin()" id="btn-login" class="flex-1 py-2.5 rounded-xl bg-pink-600 font-semibold text-sm">Ingia</button>
+        <button onclick="showRegister()" id="btn-register" class="flex-1 py-2.5 rounded-xl text-zinc-400 font-semibold text-sm">Jisajili</button>
       </div>
-
       <div id="login-form">
-        <input id="login-username" placeholder="Jina la mtumiaji" class="w-full p-3.5 mb-3 rounded-xl bg-zinc-800 border border-zinc-700 text-sm focus:outline-none focus:border-pink-500">
-        <input id="login-password" type="password" placeholder="Nenosiri" class="w-full p-3.5 mb-4 rounded-xl bg-zinc-800 border border-zinc-700 text-sm focus:outline-none focus:border-pink-500">
-        <button onclick="login()" class="w-full py-3.5 bg-pink-600 rounded-xl font-semibold hover:bg-pink-500 active:scale-[0.98] transition">Ingia</button>
+        <input id="login-username" placeholder="Jina la mtumiaji" class="w-full p-3.5 mb-3 rounded-xl bg-zinc-900 border border-zinc-700/50 text-sm focus:outline-none focus:border-pink-500">
+        <input id="login-password" type="password" placeholder="Nenosiri" class="w-full p-3.5 mb-5 rounded-xl bg-zinc-900 border border-zinc-700/50 text-sm focus:outline-none focus:border-pink-500">
+        <button onclick="login()" class="w-full py-3.5 bg-gradient-to-r from-pink-600 to-rose-500 rounded-xl font-bold active:scale-[0.98] transition">Ingia</button>
       </div>
-
       <div id="register-form" class="hidden">
-        <input id="reg-username" placeholder="Jina la mtumiaji" class="w-full p-3.5 mb-3 rounded-xl bg-zinc-800 border border-zinc-700 text-sm focus:outline-none focus:border-pink-500">
-        <input id="reg-password" type="password" placeholder="Nenosiri" class="w-full p-3.5 mb-4 rounded-xl bg-zinc-800 border border-zinc-700 text-sm focus:outline-none focus:border-pink-500">
-        <button onclick="register()" class="w-full py-3.5 bg-green-600 rounded-xl font-semibold hover:bg-green-500 active:scale-[0.98] transition">Jisajili</button>
+        <input id="reg-username" placeholder="Jina la mtumiaji" class="w-full p-3.5 mb-3 rounded-xl bg-zinc-900 border border-zinc-700/50 text-sm focus:outline-none focus:border-pink-500">
+        <input id="reg-password" type="password" placeholder="Nenosiri" class="w-full p-3.5 mb-5 rounded-xl bg-zinc-900 border border-zinc-700/50 text-sm focus:outline-none focus:border-pink-500">
+        <button onclick="register()" class="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-500 rounded-xl font-bold active:scale-[0.98] transition">Jisajili</button>
       </div>
     </div>
   </div>
 
   <!-- ==================== DASHBOARD ==================== -->
-  <div id="dashboard" class="hidden screen p-5 bg-black">
-    <div class="max-w-md mx-auto w-full pt-6">
-      <div class="flex justify-between items-center mb-8">
+  <div id="dashboard" class="hidden screen p-5" style="background: radial-gradient(ellipse at top, #1a1a2e 0%, #0a0a0f 70%);">
+    <div class="max-w-md mx-auto w-full pt-8">
+      <div class="flex justify-between items-center mb-10">
         <div>
-          <p class="text-zinc-400 text-sm">Karibu tena</p>
+          <p class="text-zinc-500 text-sm">Karibu</p>
           <h1 class="text-xl font-bold" id="username-display"></h1>
         </div>
-        <button onclick="logout()" class="px-4 py-2 bg-zinc-800 rounded-full text-sm border border-zinc-700">Toka</button>
+        <button onclick="logout()" class="px-4 py-2 rounded-full bg-zinc-800/80 border border-zinc-700 text-sm">Toka</button>
       </div>
-
-      <div class="bg-zinc-900 rounded-3xl p-6 border border-zinc-800">
-        <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
-          <span class="text-pink-500">●</span> Anzisha Live Mpya
+      <div class="glass-card p-6">
+        <h2 class="text-lg font-bold mb-5 flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-pink-500 animate-pulse"></span>
+          Anzisha Live
         </h2>
-        <input id="live-title" placeholder="Andika kichwa cha live..." class="w-full p-3.5 mb-4 rounded-xl bg-zinc-800 border border-zinc-700 text-sm focus:outline-none focus:border-pink-500">
-        
-        <div class="flex gap-3 mb-5">
-          <label class="flex-1 flex items-center justify-center gap-2 p-3 rounded-xl bg-zinc-800 border border-zinc-700 cursor-pointer has-[:checked]:border-pink-500 has-[:checked]:bg-pink-500/10">
+        <input id="live-title" placeholder="Kichwa cha live..." class="w-full p-3.5 mb-4 rounded-xl bg-zinc-900 border border-zinc-700/50 text-sm focus:outline-none focus:border-pink-500">
+        <div class="flex gap-3 mb-6">
+          <label class="flex-1 flex items-center justify-center gap-2 p-3 rounded-xl bg-zinc-900 border border-zinc-700/50 cursor-pointer has-[:checked]:border-pink-500 has-[:checked]:bg-pink-500/10 transition">
             <input type="radio" name="visibility" value="public" checked class="accent-pink-500">
-            <span class="text-sm">Public</span>
+            <span class="text-sm font-medium">Public</span>
           </label>
-          <label class="flex-1 flex items-center justify-center gap-2 p-3 rounded-xl bg-zinc-800 border border-zinc-700 cursor-pointer has-[:checked]:border-pink-500 has-[:checked]:bg-pink-500/10">
+          <label class="flex-1 flex items-center justify-center gap-2 p-3 rounded-xl bg-zinc-900 border border-zinc-700/50 cursor-pointer has-[:checked]:border-pink-500 has-[:checked]:bg-pink-500/10 transition">
             <input type="radio" name="visibility" value="private" class="accent-pink-500">
-            <span class="text-sm">Private</span>
+            <span class="text-sm font-medium">Private</span>
           </label>
         </div>
-
-        <button onclick="createLive()" class="w-full py-4 bg-gradient-to-r from-pink-600 to-rose-500 rounded-xl font-bold text-base active:scale-[0.98] transition shadow-lg shadow-pink-900/30">
-          🔴 Anzisha Live Sasa
+        <button onclick="createLive()" class="w-full py-4 bg-gradient-to-r from-pink-600 via-rose-500 to-orange-500 rounded-xl font-bold text-base shadow-lg shadow-pink-900/40 active:scale-[0.98] transition">
+          ✦ Anzisha Live Sasa
         </button>
       </div>
     </div>
   </div>
 
-  <!-- ==================== LIVE ROOM (TikTok Style) ==================== -->
-  <div id="live-room" class="hidden fixed inset-0 bg-black">
-    
-    <!-- Main Video (Host) -->
-    <div id="main-video-container">
+  <!-- ==================== LIVE ROOM ==================== -->
+  <div id="live-room" class="hidden">
+    <div id="live-stage">
+      <!-- Main Video -->
       <video id="main-video" autoplay playsinline muted></video>
-      <div id="video-loading" class="absolute inset-0 flex items-center justify-center bg-black">
-        <div class="spinner"></div>
-      </div>
-    </div>
+      <div id="video-loading"><div class="spinner"></div></div>
 
-    <!-- Guest / Viewer small videos -->
-    <div id="guest-videos"></div>
+      <!-- Guest videos -->
+      <div id="guest-rail"></div>
 
-    <!-- Top Bar -->
-    <div id="top-bar" class="overlay">
-      <div class="flex items-center gap-3">
-        <div class="flex items-center gap-2 bg-black/40 backdrop-blur-md rounded-full pl-1.5 pr-3 py-1">
-          <div class="w-8 h-8 rounded-full bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center text-xs font-bold" id="host-avatar">H</div>
-          <div>
-            <p class="text-xs font-semibold leading-tight" id="host-name">Host</p>
-            <p class="text-[10px] text-zinc-300 leading-tight"><span id="viewer-count">0</span> watazamaji</p>
+      <!-- Gift & Hearts layers -->
+      <div id="gift-layer"></div>
+      <div id="hearts-layer"></div>
+
+      <!-- Top Bar -->
+      <div id="top-bar">
+        <div class="flex items-center gap-2.5">
+          <div class="host-pill">
+            <div class="host-avatar" id="host-avatar">H</div>
+            <div>
+              <p class="text-xs font-semibold leading-tight" id="host-name">Host</p>
+              <p class="text-[10px] text-zinc-300 leading-tight"><span id="viewer-count">0</span> watazamaji</p>
+            </div>
           </div>
+          <div class="live-badge">LIVE</div>
         </div>
-        <div class="bg-pink-600 text-[10px] font-bold px-2 py-0.5 rounded">LIVE</div>
+        <div class="flex gap-2">
+          <button onclick="copyLink()" class="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-sm border border-white/10">↗</button>
+          <button onclick="leaveRoom()" class="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-sm border border-white/10">✕</button>
+        </div>
       </div>
-      <div class="flex gap-2">
-        <button onclick="copyLink()" class="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-sm">🔗</button>
-        <button onclick="leaveRoom()" class="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-sm">✕</button>
+
+      <!-- Host Controls -->
+      <div id="host-bar">
+        <button class="host-ctrl" onclick="toggleMic()" id="btn-mic">🎤 Mic</button>
+        <button class="host-ctrl" onclick="toggleCam()" id="btn-cam">📷 Cam</button>
+        <button class="host-ctrl" onclick="toggleScreen()" id="btn-screen">🖥️ Screen</button>
+        <button class="host-ctrl" onclick="openPanel('filters')">✨ Filters</button>
+        <button class="host-ctrl danger" onclick="endLive()">End Live</button>
       </div>
-    </div>
 
-    <!-- Host Controls Panel -->
-    <div id="host-panel">
-      <p class="text-xs text-zinc-400 mb-2 font-medium">Host Controls</p>
-      <div class="flex flex-wrap gap-2">
-        <button onclick="toggleMic()" id="btn-mic" class="px-3 py-1.5 bg-zinc-800 rounded-lg text-xs">🎤 Mic</button>
-        <button onclick="toggleCam()" id="btn-cam" class="px-3 py-1.5 bg-zinc-800 rounded-lg text-xs">📷 Cam</button>
-        <button onclick="toggleScreen()" id="btn-screen" class="px-3 py-1.5 bg-zinc-800 rounded-lg text-xs">🖥️ Screen</button>
-        <button onclick="endLive()" class="px-3 py-1.5 bg-red-600 rounded-lg text-xs font-semibold">End Live</button>
+      <!-- Side Actions -->
+      <div id="side-rail">
+        <button class="side-btn" onclick="sendLike()" id="btn-like">
+          <div class="side-icon">♡</div>
+          <span class="side-label" id="like-count">0</span>
+        </button>
+        <button class="side-btn" onclick="openPanel('gifts')">
+          <div class="side-icon">🎁</div>
+          <span class="side-label">Gifts</span>
+        </button>
+        <button class="side-btn" onclick="openPanel('filters')">
+          <div class="side-icon">✨</div>
+          <span class="side-label">Effects</span>
+        </button>
+        <button class="side-btn" onclick="focusChat()">
+          <div class="side-icon">💬</div>
+          <span class="side-label">Chat</span>
+        </button>
       </div>
-    </div>
 
-    <!-- Side Actions (TikTok style) -->
-    <div id="side-actions">
-      <button class="action-btn" onclick="toggleLike()" id="btn-like">
-        <span id="like-icon">♡</span>
-        <span class="action-label" id="like-count">0</span>
-      </button>
-      <button class="action-btn" onclick="focusChat()">
-        <span>💬</span>
-        <span class="action-label">Chat</span>
-      </button>
-      <button class="action-btn" onclick="copyLink()">
-        <span>↗</span>
-        <span class="action-label">Share</span>
-      </button>
-    </div>
+      <!-- Floating Chat -->
+      <div id="chat-float"></div>
 
-    <!-- Floating Chat Messages -->
-    <div id="chat-container"></div>
+      <!-- Bottom Bar -->
+      <div id="bottom-bar">
+        <input id="chat-input" placeholder="Andika ujumbe..." autocomplete="off"
+               onkeydown="if(event.key==='Enter')sendChat()">
+        <button class="bottom-icon-btn" onclick="openPanel('gifts')" title="Gifts">🎁</button>
+        <button class="bottom-icon-btn" onclick="sendChat()" style="background:linear-gradient(135deg,#ff2d55,#ff6b35);">➤</button>
+      </div>
 
-    <!-- Bottom Input Bar -->
-    <div id="bottom-bar">
-      <input id="chat-input" placeholder="Andika ujumbe..." autocomplete="off"
-             onkeydown="if(event.key==='Enter') sendChat()">
-      <button onclick="sendChat()" class="w-11 h-11 rounded-full bg-pink-600 flex items-center justify-center text-lg shrink-0">➤</button>
-    </div>
+      <!-- ========== FILTERS PANEL ========== -->
+      <div id="panel-filters" class="bottom-panel">
+        <div class="panel-handle"></div>
+        <div class="panel-title">
+          <span>✨ Filters & Effects</span>
+          <button class="panel-close" onclick="closePanels()">✕</button>
+        </div>
 
-    <!-- Live Ended Overlay -->
-    <div id="live-ended">
-      <div class="text-5xl mb-4">📴</div>
-      <h2 class="text-2xl font-bold mb-2">Live Imeisha</h2>
-      <p class="text-zinc-400 mb-6">Host ameondoka. Asante kwa kutazama!</p>
-      <button onclick="location.reload()" class="px-8 py-3 bg-pink-600 rounded-full font-semibold">Rudi Nyumbani</button>
+        <p class="text-xs text-zinc-400 mb-3 font-medium">BEAUTY</p>
+        <div class="fx-grid mb-5">
+          <button class="fx-item active" data-filter="none" onclick="applyFilter('none', this)">
+            <div class="fx-preview" style="background:#2a2a3a;">🚫</div>
+            <span>Original</span>
+          </button>
+          <button class="fx-item" data-filter="beauty" onclick="applyFilter('beauty', this)">
+            <div class="fx-preview" style="background:linear-gradient(135deg,#ff9a9e,#fad0c4);">💅</div>
+            <span>Beauty</span>
+          </button>
+          <button class="fx-item" data-filter="soft" onclick="applyFilter('soft', this)">
+            <div class="fx-preview" style="background:linear-gradient(135deg,#a18cd1,#fbc2eb);">🌸</div>
+            <span>Soft</span>
+          </button>
+          <button class="fx-item" data-filter="glow" onclick="applyFilter('glow', this)">
+            <div class="fx-preview" style="background:linear-gradient(135deg,#ffecd2,#fcb69f);">✨</div>
+            <span>Glow</span>
+          </button>
+        </div>
+
+        <p class="text-xs text-zinc-400 mb-3 font-medium">COLOR FILTERS</p>
+        <div class="fx-grid mb-5">
+          <button class="fx-item" data-filter="warm" onclick="applyFilter('warm', this)">
+            <div class="fx-preview" style="background:linear-gradient(135deg,#f6d365,#fda085);">🌅</div>
+            <span>Warm</span>
+          </button>
+          <button class="fx-item" data-filter="cool" onclick="applyFilter('cool', this)">
+            <div class="fx-preview" style="background:linear-gradient(135deg,#89f7fe,#66a6ff);">❄️</div>
+            <span>Cool</span>
+          </button>
+          <button class="fx-item" data-filter="vintage" onclick="applyFilter('vintage', this)">
+            <div class="fx-preview" style="background:linear-gradient(135deg,#c79081,#dfa579);">📷</div>
+            <span>Vintage</span>
+          </button>
+          <button class="fx-item" data-filter="cinema" onclick="applyFilter('cinema', this)">
+            <div class="fx-preview" style="background:linear-gradient(135deg,#0f0c29,#302b63,#24243e);">🎬</div>
+            <span>Cinema</span>
+          </button>
+        </div>
+
+        <p class="text-xs text-zinc-400 mb-3 font-medium">MOOD</p>
+        <div class="fx-grid">
+          <button class="fx-item" data-filter="noir" onclick="applyFilter('noir', this)">
+            <div class="fx-preview" style="background:#222;filter:grayscale(1);">🖤</div>
+            <span>Noir</span>
+          </button>
+          <button class="fx-item" data-filter="vivid" onclick="applyFilter('vivid', this)">
+            <div class="fx-preview" style="background:linear-gradient(135deg,#f093fb,#f5576c);">🌈</div>
+            <span>Vivid</span>
+          </button>
+          <button class="fx-item" data-filter="dream" onclick="applyFilter('dream', this)">
+            <div class="fx-preview" style="background:linear-gradient(135deg,#cd9cf2,#f6f3ff);">💭</div>
+            <span>Dream</span>
+          </button>
+          <button class="fx-item" data-filter="sharp" onclick="applyFilter('sharp', this)">
+            <div class="fx-preview" style="background:#333;">🔪</div>
+            <span>Sharp</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ========== GIFTS PANEL ========== -->
+      <div id="panel-gifts" class="bottom-panel">
+        <div class="panel-handle"></div>
+        <div class="panel-title">
+          <span>🎁 Tuma Zawadi</span>
+          <button class="panel-close" onclick="closePanels()">✕</button>
+        </div>
+        <div class="gift-grid" id="gift-grid">
+          <!-- populated by JS -->
+        </div>
+      </div>
+
+      <!-- Live Ended -->
+      <div id="ended-overlay">
+        <div class="text-6xl mb-5">✦</div>
+        <h2 class="text-2xl font-bold mb-2">Live Imeisha</h2>
+        <p class="text-zinc-400 mb-8 max-w-xs">Host ameondoka. Asante sana kwa kutazama!</p>
+        <button onclick="location.reload()" class="px-10 py-3.5 bg-gradient-to-r from-pink-600 to-rose-500 rounded-full font-bold">Rudi Nyumbani</button>
+      </div>
     </div>
   </div>
 
@@ -405,26 +516,49 @@
     let isHost = false;
     let hostIdentity = null;
     let likeCount = 0;
-    let hasLiked = false;
     let mainVideoAttached = false;
+    let currentFilter = "none";
+
+    // Gift catalog
+    const GIFTS = [
+      { id: "rose", emoji: "🌹", name: "Rose", price: 1 },
+      { id: "heart", emoji: "❤️", name: "Heart", price: 5 },
+      { id: "star", emoji: "⭐", name: "Star", price: 10 },
+      { id: "fire", emoji: "🔥", name: "Fire", price: 20 },
+      { id: "diamond", emoji: "💎", name: "Diamond", price: 50 },
+      { id: "crown", emoji: "👑", name: "Crown", price: 100 },
+      { id: "rocket", emoji: "🚀", name: "Rocket", price: 200 },
+      { id: "unicorn", emoji: "🦄", name: "Unicorn", price: 500 },
+    ];
+
+    // Filter CSS values
+    const FILTERS = {
+      none:    "none",
+      beauty:  "brightness(1.08) contrast(1.05) saturate(1.15) blur(0.3px)",
+      soft:    "brightness(1.1) contrast(0.95) saturate(1.1) blur(0.6px)",
+      glow:    "brightness(1.15) contrast(1.05) saturate(1.25)",
+      warm:    "brightness(1.05) sepia(0.25) saturate(1.3) hue-rotate(-10deg)",
+      cool:    "brightness(1.05) saturate(1.1) hue-rotate(15deg) contrast(1.05)",
+      vintage: "sepia(0.45) contrast(1.1) brightness(0.95) saturate(0.85)",
+      cinema:  "contrast(1.2) brightness(0.92) saturate(0.9)",
+      noir:    "grayscale(1) contrast(1.2) brightness(0.95)",
+      vivid:   "saturate(1.6) contrast(1.15) brightness(1.05)",
+      dream:   "brightness(1.12) contrast(0.9) saturate(1.2) blur(0.8px)",
+      sharp:   "contrast(1.3) saturate(1.1) brightness(1.02)",
+    };
 
     // ================= AUTH =================
     function showLogin() {
       document.getElementById("login-form").classList.remove("hidden");
       document.getElementById("register-form").classList.add("hidden");
-      document.getElementById("btn-login").classList.add("bg-pink-600");
-      document.getElementById("btn-login").classList.remove("text-zinc-400");
-      document.getElementById("btn-register").classList.remove("bg-pink-600");
-      document.getElementById("btn-register").classList.add("text-zinc-400");
+      document.getElementById("btn-login").className = "flex-1 py-2.5 rounded-xl bg-pink-600 font-semibold text-sm";
+      document.getElementById("btn-register").className = "flex-1 py-2.5 rounded-xl text-zinc-400 font-semibold text-sm";
     }
-
     function showRegister() {
       document.getElementById("register-form").classList.remove("hidden");
       document.getElementById("login-form").classList.add("hidden");
-      document.getElementById("btn-register").classList.add("bg-pink-600");
-      document.getElementById("btn-register").classList.remove("text-zinc-400");
-      document.getElementById("btn-login").classList.remove("bg-pink-600");
-      document.getElementById("btn-login").classList.add("text-zinc-400");
+      document.getElementById("btn-register").className = "flex-1 py-2.5 rounded-xl bg-pink-600 font-semibold text-sm";
+      document.getElementById("btn-login").className = "flex-1 py-2.5 rounded-xl text-zinc-400 font-semibold text-sm";
     }
 
     async function register() {
@@ -433,8 +567,7 @@
       if (!u || !p) return alert("Jaza sehemu zote");
       try {
         const res = await fetch(`${API_URL}/register`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ username: u, password: p })
         });
         if (res.ok) {
@@ -445,9 +578,7 @@
           const err = await res.json();
           alert("Hitilafu: " + (err.detail || "Jaribu tena"));
         }
-      } catch (e) {
-        alert("Tatizo la mtandao");
-      }
+      } catch { alert("Tatizo la mtandao"); }
     }
 
     async function login() {
@@ -463,18 +594,11 @@
           token = data.access_token;
           username = data.username;
           showDashboard();
-        } else {
-          alert("Jina au nenosiri si sahihi");
-        }
-      } catch (e) {
-        alert("Tatizo la mtandao");
-      }
+        } else alert("Jina au nenosiri si sahihi");
+      } catch { alert("Tatizo la mtandao"); }
     }
 
-    function logout() {
-      localStorage.clear();
-      location.reload();
-    }
+    function logout() { localStorage.clear(); location.reload(); }
 
     function showDashboard() {
       document.getElementById("auth-screen").classList.add("hidden");
@@ -482,28 +606,20 @@
       document.getElementById("username-display").textContent = username;
     }
 
-    // ================= CREATE / JOIN LIVE =================
+    // ================= CREATE / JOIN =================
     async function createLive() {
       const title = document.getElementById("live-title").value.trim() || "Live Stream";
       const isPublic = document.querySelector('input[name="visibility"]:checked').value === "public";
       try {
         const res = await fetch(`${API_URL}/rooms`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-          },
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
           body: JSON.stringify({ title, is_public: isPublic })
         });
         const data = await res.json();
-        if (res.ok) {
-          joinRoom(data.room_id, true);
-        } else {
-          alert("Hitilafu kuunda live: " + (data.detail || ""));
-        }
-      } catch (e) {
-        alert("Tatizo la mtandao");
-      }
+        if (res.ok) joinRoom(data.room_id, true);
+        else alert("Hitilafu: " + (data.detail || ""));
+      } catch { alert("Tatizo la mtandao"); }
     }
 
     async function joinRoom(roomId, asHost = false) {
@@ -514,217 +630,218 @@
       try {
         const res = await fetch(`${API_URL}/token`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            room_id: roomId,
-            identity: username,
-            role: asHost ? "host" : "viewer"
-          })
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+          body: JSON.stringify({ room_id: roomId, identity: username, role: asHost ? "host" : "viewer" })
         });
         const data = await res.json();
-        if (!res.ok) {
-          alert("Imeshindikana kuunganisha: " + (data.detail || ""));
-          return;
-        }
+        if (!res.ok) { alert("Imeshindikana: " + (data.detail || "")); return; }
 
-        // Connect to LiveKit
-        room = new LivekitClient.Room({
-          adaptiveStream: true,
-          dynacast: true,
-        });
+        room = new LivekitClient.Room({ adaptiveStream: true, dynacast: true });
 
-        // Event listeners BEFORE connect
         room.on(LivekitClient.RoomEvent.TrackSubscribed, handleTrackSubscribed);
         room.on(LivekitClient.RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
-        room.on(LivekitClient.RoomEvent.ParticipantConnected, onParticipantChange);
-        room.on(LivekitClient.RoomEvent.ParticipantDisconnected, onParticipantDisconnected);
+        room.on(LivekitClient.RoomEvent.ParticipantConnected, updateViewerCount);
+        room.on(LivekitClient.RoomEvent.ParticipantDisconnected, onParticipantLeft);
         room.on(LivekitClient.RoomEvent.DataReceived, handleData);
-        room.on(LivekitClient.RoomEvent.Disconnected, () => {
-          if (!isHost) showLiveEnded();
-        });
+        room.on(LivekitClient.RoomEvent.Disconnected, () => { if (!isHost) showEnded(); });
 
         await room.connect(data.url, data.token);
 
-        // UI switch
         document.getElementById("dashboard").classList.add("hidden");
         document.getElementById("auth-screen").classList.add("hidden");
         document.getElementById("live-room").classList.remove("hidden");
 
-        // Host panel
         if (asHost) {
-          document.getElementById("host-panel").classList.add("show");
+          document.getElementById("host-bar").classList.add("show");
           document.getElementById("host-name").textContent = username;
           document.getElementById("host-avatar").textContent = username.charAt(0).toUpperCase();
-        }
-
-        // Only HOST publishes camera + mic by default
-        if (asHost) {
           await room.localParticipant.enableCameraAndMicrophone();
           attachMainVideo(room.localParticipant);
         } else {
-          // Viewer: try to find host video already in room
           room.remoteParticipants.forEach(p => {
-            // Assume first remote with video is host, or match by metadata if available
             p.videoTrackPublications.forEach(pub => {
               if (pub.track) attachMainVideo(p);
             });
           });
         }
-
         updateViewerCount();
+        renderGifts();
       } catch (e) {
         console.error(e);
         alert("Hitilafu kuunganisha live");
       }
     }
 
-    // ================= VIDEO ATTACHMENT =================
+    // ================= VIDEO =================
     function attachMainVideo(participant) {
       const videoEl = document.getElementById("main-video");
       const loading = document.getElementById("video-loading");
-
-      // Prefer video track
       const videoPub = Array.from(participant.videoTrackPublications.values())
         .find(pub => pub.track && pub.track.kind === "video");
-
-      if (videoPub && videoPub.track) {
+      if (videoPub?.track) {
         videoPub.track.attach(videoEl);
-        videoEl.muted = (participant === room.localParticipant); // mute local to avoid echo
+        videoEl.muted = (participant === room.localParticipant);
         videoEl.play().catch(() => {});
         loading.style.display = "none";
         mainVideoAttached = true;
-
-        // Update host info
         if (!isHost) {
           hostIdentity = participant.identity;
           document.getElementById("host-name").textContent = participant.identity;
           document.getElementById("host-avatar").textContent = participant.identity.charAt(0).toUpperCase();
         }
+        // Re-apply current filter
+        applyFilter(currentFilter);
       }
     }
 
-    function attachGuestVideo(participant) {
-      if (participant.identity === hostIdentity) return; // already on main
+    function attachGuest(participant) {
+      if (participant.identity === hostIdentity) return;
       if (participant === room.localParticipant && isHost) return;
-
       let tile = document.getElementById(`guest-${participant.identity}`);
       if (!tile) {
         tile = document.createElement("div");
         tile.id = `guest-${participant.identity}`;
         tile.className = "guest-tile";
-        tile.innerHTML = `
-          <video autoplay playsinline muted></video>
-          <div class="guest-name">${participant.identity}</div>
-        `;
-        document.getElementById("guest-videos").appendChild(tile);
+        tile.innerHTML = `<video autoplay playsinline muted></video><div class="guest-name">${participant.identity}</div>`;
+        document.getElementById("guest-rail").appendChild(tile);
       }
       const vid = tile.querySelector("video");
       participant.videoTrackPublications.forEach(pub => {
-        if (pub.track) {
-          pub.track.attach(vid);
-          vid.play().catch(() => {});
-        }
+        if (pub.track) { pub.track.attach(vid); vid.play().catch(() => {}); }
       });
     }
 
     function handleTrackSubscribed(track, publication, participant) {
       if (track.kind === "video") {
-        // First video or host video → main
-        if (!mainVideoAttached || participant.identity === hostIdentity || (!hostIdentity && !isHost)) {
+        if (!mainVideoAttached || participant.identity === hostIdentity) {
           attachMainVideo(participant);
         } else {
-          attachGuestVideo(participant);
+          attachGuest(participant);
         }
       }
-      if (track.kind === "audio" && participant !== room.localParticipant) {
-        track.attach(); // play audio
-      }
+      if (track.kind === "audio" && participant !== room.localParticipant) track.attach();
       updateViewerCount();
     }
 
-    function handleTrackUnsubscribed(track, publication, participant) {
-      if (track.kind === "video") {
-        track.detach();
-        const tile = document.getElementById(`guest-${participant.identity}`);
-        if (tile) tile.remove();
-      }
+    function handleTrackUnsubscribed(track) {
+      if (track.kind === "video") track.detach();
     }
 
-    // ================= PARTICIPANTS =================
-    function onParticipantChange() {
-      updateViewerCount();
-    }
-
-    function onParticipantDisconnected(participant) {
-      // Remove guest tile
+    function onParticipantLeft(participant) {
       const tile = document.getElementById(`guest-${participant.identity}`);
       if (tile) tile.remove();
-
-      // If HOST left → end live for everyone
-      if (participant.identity === hostIdentity || (isHost === false && room.remoteParticipants.size === 0 && !mainVideoAttached)) {
-        // Check if it was the host
-        if (hostIdentity && participant.identity === hostIdentity) {
-          showLiveEnded();
-          return;
-        }
+      if (hostIdentity && participant.identity === hostIdentity) {
+        showEnded();
+        return;
       }
-      // Also: if we are viewer and no more remote participants with video
-      if (!isHost && room.remoteParticipants.size === 0) {
-        showLiveEnded();
-      }
+      if (!isHost && room.remoteParticipants.size === 0) showEnded();
       updateViewerCount();
     }
 
     function updateViewerCount() {
-      if (!room) return;
-      // numParticipants includes local
-      const count = Math.max(0, room.numParticipants - (isHost ? 0 : 0));
-      document.getElementById("viewer-count").textContent = room.numParticipants;
+      if (room) document.getElementById("viewer-count").textContent = room.numParticipants;
     }
 
-    function showLiveEnded() {
-      document.getElementById("live-ended").classList.add("show");
+    function showEnded() {
+      document.getElementById("ended-overlay").classList.add("show");
+      try { room?.disconnect(); } catch {}
+    }
+
+    // ================= FILTERS =================
+    function applyFilter(name, btn) {
+      currentFilter = name;
+      const video = document.getElementById("main-video");
+      video.style.filter = FILTERS[name] || "none";
+
+      // Update active state
+      document.querySelectorAll("#panel-filters .fx-item").forEach(el => el.classList.remove("active"));
+      if (btn) btn.classList.add("active");
+      else {
+        const match = document.querySelector(`#panel-filters .fx-item[data-filter="${name}"]`);
+        if (match) match.classList.add("active");
+      }
+    }
+
+    // ================= GIFTS =================
+    function renderGifts() {
+      const grid = document.getElementById("gift-grid");
+      grid.innerHTML = GIFTS.map(g => `
+        <button class="gift-item" onclick="sendGift('${g.id}')">
+          <span class="gift-emoji">${g.emoji}</span>
+          <span class="gift-name">${g.name}</span>
+          <span class="gift-price">★ ${g.price}</span>
+        </button>
+      `).join("");
+    }
+
+    function sendGift(giftId) {
+      const gift = GIFTS.find(g => g.id === giftId);
+      if (!gift || !room) return;
+
+      // Local animation
+      showGiftAnimation(gift, username);
+
+      // Broadcast
+      const payload = {
+        type: "gift",
+        user: username,
+        giftId: gift.id,
+        emoji: gift.emoji,
+        name: gift.name
+      };
+      room.localParticipant.publishData(
+        new TextEncoder().encode(JSON.stringify(payload)),
+        { reliable: true }
+      );
+      closePanels();
+    }
+
+    function showGiftAnimation(gift, fromUser) {
+      const layer = document.getElementById("gift-layer");
+
+      // Flying emoji
+      const fly = document.createElement("div");
+      fly.className = "flying-gift";
+      fly.textContent = gift.emoji;
+      fly.style.left = (30 + Math.random() * 40) + "%";
+      fly.style.bottom = "30%";
+      layer.appendChild(fly);
+      setTimeout(() => fly.remove(), 3000);
+
+      // Banner
+      const banner = document.createElement("div");
+      banner.className = "gift-banner";
+      banner.innerHTML = `<span style="font-size:20px">${gift.emoji}</span> <b>${fromUser}</b> alituma ${gift.name}`;
+      layer.appendChild(banner);
+      setTimeout(() => banner.remove(), 3600);
+    }
+
+    // ================= LIKES / HEARTS =================
+    function sendLike() {
+      likeCount++;
+      document.getElementById("like-count").textContent = formatCount(likeCount);
+      document.getElementById("btn-like").classList.add("liked");
+      document.querySelector("#btn-like .side-icon").textContent = "❤️";
+
+      // Floating heart
+      spawnHeart();
+
       if (room) {
-        try { room.disconnect(); } catch(e) {}
+        room.localParticipant.publishData(
+          new TextEncoder().encode(JSON.stringify({ type: "like", count: likeCount })),
+          { reliable: false }
+        );
       }
     }
 
-    // ================= CONTROLS =================
-    function toggleMic() {
-      if (!room) return;
-      const enabled = room.localParticipant.isMicrophoneEnabled;
-      room.localParticipant.setMicrophoneEnabled(!enabled);
-      document.getElementById("btn-mic").textContent = enabled ? "🔇 Mic" : "🎤 Mic";
-    }
-
-    function toggleCam() {
-      if (!room) return;
-      const enabled = room.localParticipant.isCameraEnabled;
-      room.localParticipant.setCameraEnabled(!enabled);
-      document.getElementById("btn-cam").textContent = enabled ? "🚫 Cam" : "📷 Cam";
-    }
-
-    async function toggleScreen() {
-      if (!room) return;
-      try {
-        const enabled = room.localParticipant.isScreenShareEnabled;
-        await room.localParticipant.setScreenShareEnabled(!enabled);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    function endLive() {
-      if (!confirm("Una uhakika unataka kumaliza live?")) return;
-      // Notify others
-      try {
-        const data = new TextEncoder().encode(JSON.stringify({ type: "live_ended" }));
-        room.localParticipant.publishData(data, { reliable: true });
-      } catch(e) {}
-      showLiveEnded();
+    function spawnHeart() {
+      const layer = document.getElementById("hearts-layer");
+      const heart = document.createElement("div");
+      heart.className = "float-heart";
+      heart.textContent = ["❤️","🧡","💛","💖","💕"][Math.floor(Math.random()*5)];
+      heart.style.left = (Math.random() * 40 - 10) + "px";
+      layer.appendChild(heart);
+      setTimeout(() => heart.remove(), 2300);
     }
 
     // ================= CHAT =================
@@ -732,88 +849,83 @@
       const input = document.getElementById("chat-input");
       const msg = input.value.trim();
       if (!msg || !room) return;
-
-      const payload = {
-        type: "chat",
-        user: username,
-        message: msg
-      };
-      const data = new TextEncoder().encode(JSON.stringify(payload));
-      room.localParticipant.publishData(data, { reliable: true });
-      addChatMessage(username, msg);
+      const payload = { type: "chat", user: username, message: msg };
+      room.localParticipant.publishData(
+        new TextEncoder().encode(JSON.stringify(payload)),
+        { reliable: true }
+      );
+      addChat(username, msg);
       input.value = "";
     }
 
-    function handleData(payload, participant) {
+    function handleData(payload) {
       try {
         const data = JSON.parse(new TextDecoder().decode(payload));
-        if (data.type === "chat") {
-          addChatMessage(data.user, data.message);
-        } else if (data.type === "like") {
+        if (data.type === "chat") addChat(data.user, data.message);
+        else if (data.type === "like") {
           likeCount = data.count || likeCount + 1;
           document.getElementById("like-count").textContent = formatCount(likeCount);
-        } else if (data.type === "live_ended") {
-          showLiveEnded();
+          spawnHeart();
         }
-      } catch (e) {}
+        else if (data.type === "gift") {
+          const g = GIFTS.find(x => x.id === data.giftId) || { emoji: data.emoji, name: data.name };
+          showGiftAnimation(g, data.user);
+        }
+        else if (data.type === "live_ended") showEnded();
+      } catch {}
     }
 
-    function addChatMessage(user, message) {
-      const container = document.getElementById("chat-container");
+    function addChat(user, message) {
+      const box = document.getElementById("chat-float");
       const div = document.createElement("div");
-      div.className = "chat-msg";
-      div.innerHTML = `<b>${escapeHtml(user)}</b> ${escapeHtml(message)}`;
-      container.appendChild(div);
-      // Keep only last 30 messages
-      while (container.children.length > 30) {
-        container.removeChild(container.firstChild);
-      }
-      container.scrollTop = container.scrollHeight;
+      div.className = "chat-bubble";
+      div.innerHTML = `<b>${esc(user)}</b> ${esc(message)}`;
+      box.appendChild(div);
+      while (box.children.length > 25) box.removeChild(box.firstChild);
+      box.scrollTop = box.scrollHeight;
     }
 
-    function escapeHtml(text) {
+    function esc(t) {
       const d = document.createElement("div");
-      d.textContent = text;
+      d.textContent = t;
       return d.innerHTML;
     }
 
     function focusChat() {
+      closePanels();
       document.getElementById("chat-input").focus();
     }
 
-    // ================= LIKE =================
-    function toggleLike() {
-      if (hasLiked) return;
-      hasLiked = true;
-      likeCount++;
-      document.getElementById("like-icon").textContent = "❤️";
-      document.getElementById("like-icon").classList.add("liked");
-      document.getElementById("like-count").textContent = formatCount(likeCount);
-
-      // Broadcast like
-      if (room) {
-        const data = new TextEncoder().encode(JSON.stringify({
-          type: "like",
-          count: likeCount
-        }));
-        room.localParticipant.publishData(data, { reliable: false });
-      }
+    // ================= CONTROLS =================
+    function toggleMic() {
+      if (!room) return;
+      const on = room.localParticipant.isMicrophoneEnabled;
+      room.localParticipant.setMicrophoneEnabled(!on);
+      document.getElementById("btn-mic").textContent = on ? "🔇 Mic" : "🎤 Mic";
+    }
+    function toggleCam() {
+      if (!room) return;
+      const on = room.localParticipant.isCameraEnabled;
+      room.localParticipant.setCameraEnabled(!on);
+      document.getElementById("btn-cam").textContent = on ? "🚫 Cam" : "📷 Cam";
+    }
+    async function toggleScreen() {
+      if (!room) return;
+      try {
+        const on = room.localParticipant.isScreenShareEnabled;
+        await room.localParticipant.setScreenShareEnabled(!on);
+      } catch (e) { console.error(e); }
     }
 
-    function formatCount(n) {
-      if (n >= 1000000) return (n / 1000000).toFixed(1) + "M";
-      if (n >= 1000) return (n / 1000).toFixed(1) + "K";
-      return n.toString();
-    }
-
-    // ================= UTIL =================
-    function copyLink() {
-      const link = `${window.location.origin}${window.location.pathname}?room=${currentRoomId}`;
-      navigator.clipboard.writeText(link).then(() => {
-        alert("Link imenakiliwa!");
-      }).catch(() => {
-        prompt("Nakili link hii:", link);
-      });
+    function endLive() {
+      if (!confirm("Maliza live sasa?")) return;
+      try {
+        room.localParticipant.publishData(
+          new TextEncoder().encode(JSON.stringify({ type: "live_ended" })),
+          { reliable: true }
+        );
+      } catch {}
+      showEnded();
     }
 
     function leaveRoom() {
@@ -821,22 +933,37 @@
         if (!confirm("Ukiondoka live itamalizika. Unaendelea?")) return;
         endLive();
       } else {
-        if (room) room.disconnect();
+        room?.disconnect();
         location.reload();
       }
     }
 
+    function copyLink() {
+      const link = `${location.origin}${location.pathname}?room=${currentRoomId}`;
+      navigator.clipboard.writeText(link).then(() => alert("Link imenakiliwa!"))
+        .catch(() => prompt("Nakili link:", link));
+    }
+
+    // ================= PANELS =================
+    function openPanel(name) {
+      closePanels();
+      document.getElementById(`panel-${name}`)?.classList.add("open");
+    }
+    function closePanels() {
+      document.querySelectorAll(".bottom-panel").forEach(p => p.classList.remove("open"));
+    }
+
+    function formatCount(n) {
+      if (n >= 1e6) return (n/1e6).toFixed(1) + "M";
+      if (n >= 1e3) return (n/1e3).toFixed(1) + "K";
+      return String(n);
+    }
+
     // ================= INIT =================
     window.onload = () => {
-      if (token && username) {
-        showDashboard();
-      }
-      const params = new URLSearchParams(window.location.search);
-      const roomParam = params.get("room");
-      if (roomParam && token) {
-        // Small delay to let dashboard render then join
-        setTimeout(() => joinRoom(roomParam, false), 300);
-      }
+      if (token && username) showDashboard();
+      const roomParam = new URLSearchParams(location.search).get("room");
+      if (roomParam && token) setTimeout(() => joinRoom(roomParam, false), 250);
     };
   </script>
 </body>
