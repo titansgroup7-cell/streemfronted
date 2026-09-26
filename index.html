@@ -2,117 +2,396 @@
 <html lang="sw">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Live Stream</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
   <style>
-    body { background: #0f0f13; }
-    .video-grid { display: grid; gap: 12px; }
-    @media (min-width: 768px) {
-      .video-grid { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { background: #000; margin: 0; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    
+    /* TikTok-style full screen video */
+    #main-video-container {
+      position: absolute;
+      inset: 0;
+      background: #000;
+      z-index: 1;
     }
+    #main-video-container video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      background: #111;
+    }
+    
+    /* Guest videos - small floating tiles */
+    #guest-videos {
+      position: absolute;
+      top: 80px;
+      right: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 20;
+      max-height: 50vh;
+      overflow-y: auto;
+    }
+    .guest-tile {
+      width: 90px;
+      height: 120px;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #222;
+      border: 2px solid rgba(255,255,255,0.3);
+      position: relative;
+      flex-shrink: 0;
+    }
+    .guest-tile video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .guest-name {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(transparent, rgba(0,0,0,0.8));
+      font-size: 10px;
+      padding: 4px 6px;
+      text-align: center;
+      color: #fff;
+    }
+
+    /* Overlay UI */
+    .overlay { position: absolute; z-index: 30; pointer-events: none; }
+    .overlay > * { pointer-events: auto; }
+
+    /* Right side actions (TikTok style) */
+    #side-actions {
+      position: absolute;
+      right: 12px;
+      bottom: 140px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+      z-index: 40;
+    }
+    .action-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(10px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 22px;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+    .action-btn:active { transform: scale(0.9); }
+    .action-label {
+      font-size: 11px;
+      margin-top: 2px;
+      font-weight: 600;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    }
+    .liked { color: #fe2c55; }
+
+    /* Floating chat */
+    #chat-container {
+      position: absolute;
+      left: 10px;
+      bottom: 90px;
+      width: min(280px, 70vw);
+      max-height: 35vh;
+      overflow-y: auto;
+      z-index: 35;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 100%);
+      -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 100%);
+      scrollbar-width: none;
+    }
+    #chat-container::-webkit-scrollbar { display: none; }
+    .chat-msg {
+      background: rgba(0,0,0,0.45);
+      backdrop-filter: blur(8px);
+      padding: 6px 10px;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.3;
+      color: #fff;
+      word-break: break-word;
+      animation: fadeIn 0.25s ease;
+    }
+    .chat-msg b { color: #25f4ee; font-weight: 600; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Bottom bar */
+    #bottom-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 10px 12px 16px;
+      background: linear-gradient(transparent, rgba(0,0,0,0.7));
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #chat-input {
+      flex: 1;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 24px;
+      padding: 10px 16px;
+      color: white;
+      font-size: 14px;
+      outline: none;
+    }
+    #chat-input::placeholder { color: rgba(255,255,255,0.5); }
+
+    /* Top bar */
+    #top-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 12px 14px;
+      background: linear-gradient(rgba(0,0,0,0.6), transparent);
+      z-index: 50;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    /* Host controls panel */
+    #host-panel {
+      position: absolute;
+      top: 70px;
+      left: 10px;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(12px);
+      border-radius: 14px;
+      padding: 12px;
+      z-index: 40;
+      max-width: 200px;
+      display: none;
+    }
+    #host-panel.show { display: block; }
+
+    /* Live ended overlay */
+    #live-ended {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      z-index: 100;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 20px;
+    }
+    #live-ended.show { display: flex; }
+
+    /* Desktop adjustments */
+    @media (min-width: 768px) {
+      #main-video-container {
+        left: 50%;
+        transform: translateX(-50%);
+        max-width: 420px;
+        border-radius: 0;
+      }
+      #guest-videos {
+        right: calc(50% - 210px - 110px);
+      }
+      #side-actions {
+        right: calc(50% - 210px + 20px);
+      }
+      #chat-container {
+        left: calc(50% - 210px + 12px);
+        width: 260px;
+      }
+      #bottom-bar {
+        left: 50%;
+        transform: translateX(-50%);
+        max-width: 420px;
+        width: 100%;
+      }
+      #top-bar {
+        left: 50%;
+        transform: translateX(-50%);
+        max-width: 420px;
+        width: 100%;
+      }
+    }
+
+    /* Loading spinner */
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid rgba(255,255,255,0.2);
+      border-top-color: #fe2c55;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Auth & Dashboard screens */
+    .screen { min-height: 100vh; display: flex; flex-direction: column; }
   </style>
 </head>
-<body class="text-white min-h-screen">
+<body class="text-white">
 
-  <!-- LOGIN / REGISTER -->
-  <div id="auth-screen" class="min-h-screen flex items-center justify-center p-4">
-    <div class="bg-gray-900 p-8 rounded-2xl w-full max-w-md shadow-2xl">
-      <h1 class="text-3xl font-bold mb-6 text-center">Live Stream</h1>
+  <!-- ==================== AUTH SCREEN ==================== -->
+  <div id="auth-screen" class="screen items-center justify-center p-4 bg-black">
+    <div class="bg-zinc-900 p-7 rounded-3xl w-full max-w-sm shadow-2xl border border-zinc-800">
+      <div class="text-center mb-7">
+        <div class="text-4xl mb-2">🔴</div>
+        <h1 class="text-2xl font-bold">Live Stream</h1>
+        <p class="text-zinc-400 text-sm mt-1">Ingia au jisajili kuendelea</p>
+      </div>
       
-      <div class="flex gap-2 mb-6">
-        <button onclick="showLogin()" id="btn-login" class="flex-1 py-2 rounded-lg bg-blue-600">Ingia</button>
-        <button onclick="showRegister()" id="btn-register" class="flex-1 py-2 rounded-lg bg-gray-700">Jisajili</button>
+      <div class="flex gap-2 mb-5 bg-zinc-800 p-1 rounded-xl">
+        <button onclick="showLogin()" id="btn-login" class="flex-1 py-2.5 rounded-lg bg-pink-600 font-medium text-sm transition">Ingia</button>
+        <button onclick="showRegister()" id="btn-register" class="flex-1 py-2.5 rounded-lg text-zinc-400 font-medium text-sm transition">Jisajili</button>
       </div>
 
-      <!-- Login Form -->
       <div id="login-form">
-        <input id="login-username" placeholder="Jina la mtumiaji" class="w-full p-3 mb-3 rounded-lg bg-gray-800 border border-gray-700">
-        <input id="login-password" type="password" placeholder="Nenosiri" class="w-full p-3 mb-4 rounded-lg bg-gray-800 border border-gray-700">
-        <button onclick="login()" class="w-full py-3 bg-blue-600 rounded-lg font-semibold hover:bg-blue-700">Ingia</button>
+        <input id="login-username" placeholder="Jina la mtumiaji" class="w-full p-3.5 mb-3 rounded-xl bg-zinc-800 border border-zinc-700 text-sm focus:outline-none focus:border-pink-500">
+        <input id="login-password" type="password" placeholder="Nenosiri" class="w-full p-3.5 mb-4 rounded-xl bg-zinc-800 border border-zinc-700 text-sm focus:outline-none focus:border-pink-500">
+        <button onclick="login()" class="w-full py-3.5 bg-pink-600 rounded-xl font-semibold hover:bg-pink-500 active:scale-[0.98] transition">Ingia</button>
       </div>
 
-      <!-- Register Form -->
       <div id="register-form" class="hidden">
-        <input id="reg-username" placeholder="Jina la mtumiaji" class="w-full p-3 mb-3 rounded-lg bg-gray-800 border border-gray-700">
-        <input id="reg-password" type="password" placeholder="Nenosiri" class="w-full p-3 mb-4 rounded-lg bg-gray-800 border border-gray-700">
-        <button onclick="register()" class="w-full py-3 bg-green-600 rounded-lg font-semibold hover:bg-green-700">Jisajili</button>
+        <input id="reg-username" placeholder="Jina la mtumiaji" class="w-full p-3.5 mb-3 rounded-xl bg-zinc-800 border border-zinc-700 text-sm focus:outline-none focus:border-pink-500">
+        <input id="reg-password" type="password" placeholder="Nenosiri" class="w-full p-3.5 mb-4 rounded-xl bg-zinc-800 border border-zinc-700 text-sm focus:outline-none focus:border-pink-500">
+        <button onclick="register()" class="w-full py-3.5 bg-green-600 rounded-xl font-semibold hover:bg-green-500 active:scale-[0.98] transition">Jisajili</button>
       </div>
     </div>
   </div>
 
-  <!-- DASHBOARD -->
-  <div id="dashboard" class="hidden min-h-screen p-4 md:p-8">
-    <div class="max-w-5xl mx-auto">
+  <!-- ==================== DASHBOARD ==================== -->
+  <div id="dashboard" class="hidden screen p-5 bg-black">
+    <div class="max-w-md mx-auto w-full pt-6">
       <div class="flex justify-between items-center mb-8">
-        <h1 class="text-2xl font-bold">Karibu, <span id="username-display"></span></h1>
-        <button onclick="logout()" class="px-4 py-2 bg-red-600 rounded-lg">Toka</button>
+        <div>
+          <p class="text-zinc-400 text-sm">Karibu tena</p>
+          <h1 class="text-xl font-bold" id="username-display"></h1>
+        </div>
+        <button onclick="logout()" class="px-4 py-2 bg-zinc-800 rounded-full text-sm border border-zinc-700">Toka</button>
       </div>
 
-      <div class="bg-gray-900 p-6 rounded-2xl mb-8">
-        <h2 class="text-xl font-semibold mb-4">Anzisha Live Mpya</h2>
-        <input id="live-title" placeholder="Kichwa cha live..." class="w-full p-3 mb-3 rounded-lg bg-gray-800 border border-gray-700">
-        <div class="flex gap-4 mb-4">
-          <label class="flex items-center gap-2">
-            <input type="radio" name="visibility" value="public" checked> Public
+      <div class="bg-zinc-900 rounded-3xl p-6 border border-zinc-800">
+        <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+          <span class="text-pink-500">●</span> Anzisha Live Mpya
+        </h2>
+        <input id="live-title" placeholder="Andika kichwa cha live..." class="w-full p-3.5 mb-4 rounded-xl bg-zinc-800 border border-zinc-700 text-sm focus:outline-none focus:border-pink-500">
+        
+        <div class="flex gap-3 mb-5">
+          <label class="flex-1 flex items-center justify-center gap-2 p-3 rounded-xl bg-zinc-800 border border-zinc-700 cursor-pointer has-[:checked]:border-pink-500 has-[:checked]:bg-pink-500/10">
+            <input type="radio" name="visibility" value="public" checked class="accent-pink-500">
+            <span class="text-sm">Public</span>
           </label>
-          <label class="flex items-center gap-2">
-            <input type="radio" name="visibility" value="private"> Private
+          <label class="flex-1 flex items-center justify-center gap-2 p-3 rounded-xl bg-zinc-800 border border-zinc-700 cursor-pointer has-[:checked]:border-pink-500 has-[:checked]:bg-pink-500/10">
+            <input type="radio" name="visibility" value="private" class="accent-pink-500">
+            <span class="text-sm">Private</span>
           </label>
         </div>
-        <button onclick="createLive()" class="w-full py-3 bg-purple-600 rounded-lg font-semibold hover:bg-purple-700">
-          Anzisha Live
+
+        <button onclick="createLive()" class="w-full py-4 bg-gradient-to-r from-pink-600 to-rose-500 rounded-xl font-bold text-base active:scale-[0.98] transition shadow-lg shadow-pink-900/30">
+          🔴 Anzisha Live Sasa
         </button>
       </div>
     </div>
   </div>
 
-  <!-- LIVE ROOM -->
-  <div id="live-room" class="hidden min-h-screen flex flex-col">
-    <!-- Header -->
-    <div class="bg-gray-900 px-4 py-3 flex justify-between items-center border-b border-gray-800">
-      <div>
-        <h2 id="room-title" class="font-bold text-lg"></h2>
-        <p class="text-sm text-gray-400"><span id="viewer-count">0</span> watazamaji</p>
-      </div>
-      <div class="flex gap-2">
-        <button id="btn-share" onclick="copyLink()" class="px-4 py-2 bg-gray-700 rounded-lg text-sm">Share Link</button>
-        <button onclick="leaveRoom()" class="px-4 py-2 bg-red-600 rounded-lg text-sm">Ondoka</button>
+  <!-- ==================== LIVE ROOM (TikTok Style) ==================== -->
+  <div id="live-room" class="hidden fixed inset-0 bg-black">
+    
+    <!-- Main Video (Host) -->
+    <div id="main-video-container">
+      <video id="main-video" autoplay playsinline muted></video>
+      <div id="video-loading" class="absolute inset-0 flex items-center justify-center bg-black">
+        <div class="spinner"></div>
       </div>
     </div>
 
-    <!-- Main Content -->
-    <div class="flex-1 flex flex-col md:flex-row overflow-hidden">
-      <!-- Videos -->
-      <div class="flex-1 p-4 overflow-y-auto">
-        <div id="video-grid" class="video-grid"></div>
-      </div>
+    <!-- Guest / Viewer small videos -->
+    <div id="guest-videos"></div>
 
-      <!-- Sidebar (Chat + Controls) -->
-      <div class="w-full md:w-80 bg-gray-900 border-l border-gray-800 flex flex-col">
-        <!-- Host Controls -->
-        <div id="host-controls" class="hidden p-4 border-b border-gray-800">
-          <h3 class="font-semibold mb-3">Host Controls</h3>
-          <div id="participants-list" class="space-y-2 text-sm"></div>
-        </div>
-
-        <!-- Chat -->
-        <div class="flex-1 flex flex-col p-4">
-          <div id="chat-messages" class="flex-1 overflow-y-auto space-y-2 mb-3 text-sm"></div>
-          <div class="flex gap-2">
-            <input id="chat-input" placeholder="Andika ujumbe..." class="flex-1 p-2 rounded-lg bg-gray-800 border border-gray-700 text-sm">
-            <button onclick="sendChat()" class="px-4 bg-blue-600 rounded-lg text-sm">Tuma</button>
+    <!-- Top Bar -->
+    <div id="top-bar" class="overlay">
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 bg-black/40 backdrop-blur-md rounded-full pl-1.5 pr-3 py-1">
+          <div class="w-8 h-8 rounded-full bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center text-xs font-bold" id="host-avatar">H</div>
+          <div>
+            <p class="text-xs font-semibold leading-tight" id="host-name">Host</p>
+            <p class="text-[10px] text-zinc-300 leading-tight"><span id="viewer-count">0</span> watazamaji</p>
           </div>
         </div>
+        <div class="bg-pink-600 text-[10px] font-bold px-2 py-0.5 rounded">LIVE</div>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="copyLink()" class="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-sm">🔗</button>
+        <button onclick="leaveRoom()" class="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-sm">✕</button>
       </div>
     </div>
 
-    <!-- Bottom Controls -->
-    <div class="bg-gray-900 border-t border-gray-800 p-4 flex justify-center gap-4">
-      <button id="btn-mic" onclick="toggleMic()" class="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center">🎤</button>
-      <button id="btn-cam" onclick="toggleCam()" class="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center">📷</button>
-      <button id="btn-screen" onclick="toggleScreen()" class="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center">🖥️</button>
+    <!-- Host Controls Panel -->
+    <div id="host-panel">
+      <p class="text-xs text-zinc-400 mb-2 font-medium">Host Controls</p>
+      <div class="flex flex-wrap gap-2">
+        <button onclick="toggleMic()" id="btn-mic" class="px-3 py-1.5 bg-zinc-800 rounded-lg text-xs">🎤 Mic</button>
+        <button onclick="toggleCam()" id="btn-cam" class="px-3 py-1.5 bg-zinc-800 rounded-lg text-xs">📷 Cam</button>
+        <button onclick="toggleScreen()" id="btn-screen" class="px-3 py-1.5 bg-zinc-800 rounded-lg text-xs">🖥️ Screen</button>
+        <button onclick="endLive()" class="px-3 py-1.5 bg-red-600 rounded-lg text-xs font-semibold">End Live</button>
+      </div>
+    </div>
+
+    <!-- Side Actions (TikTok style) -->
+    <div id="side-actions">
+      <button class="action-btn" onclick="toggleLike()" id="btn-like">
+        <span id="like-icon">♡</span>
+        <span class="action-label" id="like-count">0</span>
+      </button>
+      <button class="action-btn" onclick="focusChat()">
+        <span>💬</span>
+        <span class="action-label">Chat</span>
+      </button>
+      <button class="action-btn" onclick="copyLink()">
+        <span>↗</span>
+        <span class="action-label">Share</span>
+      </button>
+    </div>
+
+    <!-- Floating Chat Messages -->
+    <div id="chat-container"></div>
+
+    <!-- Bottom Input Bar -->
+    <div id="bottom-bar">
+      <input id="chat-input" placeholder="Andika ujumbe..." autocomplete="off"
+             onkeydown="if(event.key==='Enter') sendChat()">
+      <button onclick="sendChat()" class="w-11 h-11 rounded-full bg-pink-600 flex items-center justify-center text-lg shrink-0">➤</button>
+    </div>
+
+    <!-- Live Ended Overlay -->
+    <div id="live-ended">
+      <div class="text-5xl mb-4">📴</div>
+      <h2 class="text-2xl font-bold mb-2">Live Imeisha</h2>
+      <p class="text-zinc-400 mb-6">Host ameondoka. Asante kwa kutazama!</p>
+      <button onclick="location.reload()" class="px-8 py-3 bg-pink-600 rounded-full font-semibold">Rudi Nyumbani</button>
     </div>
   </div>
 
@@ -122,59 +401,73 @@
     let token = localStorage.getItem("token");
     let username = localStorage.getItem("username");
     let room = null;
-    let localParticipant = null;
     let currentRoomId = null;
     let isHost = false;
+    let hostIdentity = null;
+    let likeCount = 0;
+    let hasLiked = false;
+    let mainVideoAttached = false;
 
     // ================= AUTH =================
     function showLogin() {
       document.getElementById("login-form").classList.remove("hidden");
       document.getElementById("register-form").classList.add("hidden");
-      document.getElementById("btn-login").classList.add("bg-blue-600");
-      document.getElementById("btn-register").classList.remove("bg-blue-600");
+      document.getElementById("btn-login").classList.add("bg-pink-600");
+      document.getElementById("btn-login").classList.remove("text-zinc-400");
+      document.getElementById("btn-register").classList.remove("bg-pink-600");
+      document.getElementById("btn-register").classList.add("text-zinc-400");
     }
 
     function showRegister() {
       document.getElementById("register-form").classList.remove("hidden");
       document.getElementById("login-form").classList.add("hidden");
-      document.getElementById("btn-register").classList.add("bg-blue-600");
-      document.getElementById("btn-login").classList.remove("bg-blue-600");
+      document.getElementById("btn-register").classList.add("bg-pink-600");
+      document.getElementById("btn-register").classList.remove("text-zinc-400");
+      document.getElementById("btn-login").classList.remove("bg-pink-600");
+      document.getElementById("btn-login").classList.add("text-zinc-400");
     }
 
     async function register() {
-      const username = document.getElementById("reg-username").value;
-      const password = document.getElementById("reg-password").value;
-      const res = await fetch(`${API_URL}/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password })
-      });
-      if (res.ok) {
-        alert("Usajili umefanikiwa! Sasa ingia.");
-        showLogin();
-      } else {
-        alert("Hitilafu: " + (await res.json()).detail);
+      const u = document.getElementById("reg-username").value.trim();
+      const p = document.getElementById("reg-password").value;
+      if (!u || !p) return alert("Jaza sehemu zote");
+      try {
+        const res = await fetch(`${API_URL}/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: u, password: p })
+        });
+        if (res.ok) {
+          alert("Usajili umefanikiwa! Sasa ingia.");
+          showLogin();
+          document.getElementById("login-username").value = u;
+        } else {
+          const err = await res.json();
+          alert("Hitilafu: " + (err.detail || "Jaribu tena"));
+        }
+      } catch (e) {
+        alert("Tatizo la mtandao");
       }
     }
 
     async function login() {
       const form = new FormData();
-      form.append("username", document.getElementById("login-username").value);
+      form.append("username", document.getElementById("login-username").value.trim());
       form.append("password", document.getElementById("login-password").value);
-
-      const res = await fetch(`${API_URL}/login`, {
-        method: "POST",
-        body: form
-      });
-      const data = await res.json();
-      if (res.ok) {
-        localStorage.setItem("token", data.access_token);
-        localStorage.setItem("username", data.username);
-        token = data.access_token;
-        username = data.username;
-        showDashboard();
-      } else {
-        alert("Jina au nenosiri si sahihi");
+      try {
+        const res = await fetch(`${API_URL}/login`, { method: "POST", body: form });
+        const data = await res.json();
+        if (res.ok) {
+          localStorage.setItem("token", data.access_token);
+          localStorage.setItem("username", data.username);
+          token = data.access_token;
+          username = data.username;
+          showDashboard();
+        } else {
+          alert("Jina au nenosiri si sahihi");
+        }
+      } catch (e) {
+        alert("Tatizo la mtandao");
       }
     }
 
@@ -189,161 +482,360 @@
       document.getElementById("username-display").textContent = username;
     }
 
-    // ================= CREATE LIVE =================
+    // ================= CREATE / JOIN LIVE =================
     async function createLive() {
-      const title = document.getElementById("live-title").value || "Live Stream";
+      const title = document.getElementById("live-title").value.trim() || "Live Stream";
       const isPublic = document.querySelector('input[name="visibility"]:checked').value === "public";
-
-      const res = await fetch(`${API_URL}/rooms`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({ title, is_public: isPublic })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        joinRoom(data.room_id, true);
-      } else {
-        alert("Hitilafu kuunda live");
+      try {
+        const res = await fetch(`${API_URL}/rooms`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ title, is_public: isPublic })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          joinRoom(data.room_id, true);
+        } else {
+          alert("Hitilafu kuunda live: " + (data.detail || ""));
+        }
+      } catch (e) {
+        alert("Tatizo la mtandao");
       }
     }
 
-    // ================= JOIN ROOM =================
     async function joinRoom(roomId, asHost = false) {
       currentRoomId = roomId;
       isHost = asHost;
+      hostIdentity = asHost ? username : null;
 
-      const res = await fetch(`${API_URL}/token`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          room_id: roomId,
-          identity: username,
-          role: asHost ? "host" : "viewer"
-        })
-      });
-      const data = await res.json();
+      try {
+        const res = await fetch(`${API_URL}/token`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            room_id: roomId,
+            identity: username,
+            role: asHost ? "host" : "viewer"
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert("Imeshindikana kuunganisha: " + (data.detail || ""));
+          return;
+        }
 
-      // Connect to LiveKit
-      room = new LivekitClient.Room();
-      await room.connect(data.url, data.token);
+        // Connect to LiveKit
+        room = new LivekitClient.Room({
+          adaptiveStream: true,
+          dynacast: true,
+        });
 
-      document.getElementById("dashboard").classList.add("hidden");
-      document.getElementById("live-room").classList.remove("hidden");
-      document.getElementById("room-title").textContent = "Live: " + roomId;
-      if (asHost) document.getElementById("host-controls").classList.remove("hidden");
+        // Event listeners BEFORE connect
+        room.on(LivekitClient.RoomEvent.TrackSubscribed, handleTrackSubscribed);
+        room.on(LivekitClient.RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
+        room.on(LivekitClient.RoomEvent.ParticipantConnected, onParticipantChange);
+        room.on(LivekitClient.RoomEvent.ParticipantDisconnected, onParticipantDisconnected);
+        room.on(LivekitClient.RoomEvent.DataReceived, handleData);
+        room.on(LivekitClient.RoomEvent.Disconnected, () => {
+          if (!isHost) showLiveEnded();
+        });
 
-      // Local video
-      await room.localParticipant.enableCameraAndMicrophone();
-      attachTrack(room.localParticipant, true);
+        await room.connect(data.url, data.token);
 
-      // Remote participants
-      room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
-        if (track.kind === "video" || track.kind === "audio") {
-          attachTrack(participant);
+        // UI switch
+        document.getElementById("dashboard").classList.add("hidden");
+        document.getElementById("auth-screen").classList.add("hidden");
+        document.getElementById("live-room").classList.remove("hidden");
+
+        // Host panel
+        if (asHost) {
+          document.getElementById("host-panel").classList.add("show");
+          document.getElementById("host-name").textContent = username;
+          document.getElementById("host-avatar").textContent = username.charAt(0).toUpperCase();
+        }
+
+        // Only HOST publishes camera + mic by default
+        if (asHost) {
+          await room.localParticipant.enableCameraAndMicrophone();
+          attachMainVideo(room.localParticipant);
+        } else {
+          // Viewer: try to find host video already in room
+          room.remoteParticipants.forEach(p => {
+            // Assume first remote with video is host, or match by metadata if available
+            p.videoTrackPublications.forEach(pub => {
+              if (pub.track) attachMainVideo(p);
+            });
+          });
+        }
+
+        updateViewerCount();
+      } catch (e) {
+        console.error(e);
+        alert("Hitilafu kuunganisha live");
+      }
+    }
+
+    // ================= VIDEO ATTACHMENT =================
+    function attachMainVideo(participant) {
+      const videoEl = document.getElementById("main-video");
+      const loading = document.getElementById("video-loading");
+
+      // Prefer video track
+      const videoPub = Array.from(participant.videoTrackPublications.values())
+        .find(pub => pub.track && pub.track.kind === "video");
+
+      if (videoPub && videoPub.track) {
+        videoPub.track.attach(videoEl);
+        videoEl.muted = (participant === room.localParticipant); // mute local to avoid echo
+        videoEl.play().catch(() => {});
+        loading.style.display = "none";
+        mainVideoAttached = true;
+
+        // Update host info
+        if (!isHost) {
+          hostIdentity = participant.identity;
+          document.getElementById("host-name").textContent = participant.identity;
+          document.getElementById("host-avatar").textContent = participant.identity.charAt(0).toUpperCase();
+        }
+      }
+    }
+
+    function attachGuestVideo(participant) {
+      if (participant.identity === hostIdentity) return; // already on main
+      if (participant === room.localParticipant && isHost) return;
+
+      let tile = document.getElementById(`guest-${participant.identity}`);
+      if (!tile) {
+        tile = document.createElement("div");
+        tile.id = `guest-${participant.identity}`;
+        tile.className = "guest-tile";
+        tile.innerHTML = `
+          <video autoplay playsinline muted></video>
+          <div class="guest-name">${participant.identity}</div>
+        `;
+        document.getElementById("guest-videos").appendChild(tile);
+      }
+      const vid = tile.querySelector("video");
+      participant.videoTrackPublications.forEach(pub => {
+        if (pub.track) {
+          pub.track.attach(vid);
+          vid.play().catch(() => {});
         }
       });
-
-      room.on(LivekitClient.RoomEvent.ParticipantConnected, updateParticipants);
-      room.on(LivekitClient.RoomEvent.ParticipantDisconnected, updateParticipants);
-      room.on(LivekitClient.RoomEvent.DataReceived, handleData);
-
-      updateParticipants();
     }
 
-    function attachTrack(participant, isLocal = false) {
-      const container = document.getElementById("video-grid");
-      let el = document.getElementById(`vid-${participant.identity}`);
-      if (!el) {
-        el = document.createElement("div");
-        el.id = `vid-${participant.identity}`;
-        el.className = "relative bg-black rounded-xl overflow-hidden aspect-video";
-        el.innerHTML = `<video autoplay playsinline class="w-full h-full object-cover"></video>
-                        <div class="absolute bottom-2 left-2 bg-black/60 px-2 py-1 rounded text-xs">${participant.identity}${isLocal ? " (Wewe)" : ""}</div>`;
-        container.appendChild(el);
+    function handleTrackSubscribed(track, publication, participant) {
+      if (track.kind === "video") {
+        // First video or host video → main
+        if (!mainVideoAttached || participant.identity === hostIdentity || (!hostIdentity && !isHost)) {
+          attachMainVideo(participant);
+        } else {
+          attachGuestVideo(participant);
+        }
       }
-      const videoEl = el.querySelector("video");
-      participant.videoTrackPublications.forEach(pub => {
-        if (pub.track) pub.track.attach(videoEl);
-      });
+      if (track.kind === "audio" && participant !== room.localParticipant) {
+        track.attach(); // play audio
+      }
+      updateViewerCount();
     }
 
-    function updateParticipants() {
-      // Simple viewer count
+    function handleTrackUnsubscribed(track, publication, participant) {
+      if (track.kind === "video") {
+        track.detach();
+        const tile = document.getElementById(`guest-${participant.identity}`);
+        if (tile) tile.remove();
+      }
+    }
+
+    // ================= PARTICIPANTS =================
+    function onParticipantChange() {
+      updateViewerCount();
+    }
+
+    function onParticipantDisconnected(participant) {
+      // Remove guest tile
+      const tile = document.getElementById(`guest-${participant.identity}`);
+      if (tile) tile.remove();
+
+      // If HOST left → end live for everyone
+      if (participant.identity === hostIdentity || (isHost === false && room.remoteParticipants.size === 0 && !mainVideoAttached)) {
+        // Check if it was the host
+        if (hostIdentity && participant.identity === hostIdentity) {
+          showLiveEnded();
+          return;
+        }
+      }
+      // Also: if we are viewer and no more remote participants with video
+      if (!isHost && room.remoteParticipants.size === 0) {
+        showLiveEnded();
+      }
+      updateViewerCount();
+    }
+
+    function updateViewerCount() {
+      if (!room) return;
+      // numParticipants includes local
+      const count = Math.max(0, room.numParticipants - (isHost ? 0 : 0));
       document.getElementById("viewer-count").textContent = room.numParticipants;
+    }
+
+    function showLiveEnded() {
+      document.getElementById("live-ended").classList.add("show");
+      if (room) {
+        try { room.disconnect(); } catch(e) {}
+      }
     }
 
     // ================= CONTROLS =================
     function toggleMic() {
+      if (!room) return;
       const enabled = room.localParticipant.isMicrophoneEnabled;
       room.localParticipant.setMicrophoneEnabled(!enabled);
-      document.getElementById("btn-mic").textContent = enabled ? "🔇" : "🎤";
+      document.getElementById("btn-mic").textContent = enabled ? "🔇 Mic" : "🎤 Mic";
     }
 
     function toggleCam() {
+      if (!room) return;
       const enabled = room.localParticipant.isCameraEnabled;
       room.localParticipant.setCameraEnabled(!enabled);
-      document.getElementById("btn-cam").textContent = enabled ? "🚫" : "📷";
+      document.getElementById("btn-cam").textContent = enabled ? "🚫 Cam" : "📷 Cam";
     }
 
     async function toggleScreen() {
-      // Simple screen share
+      if (!room) return;
       try {
-        await room.localParticipant.setScreenShareEnabled(true);
+        const enabled = room.localParticipant.isScreenShareEnabled;
+        await room.localParticipant.setScreenShareEnabled(!enabled);
       } catch (e) {
         console.error(e);
       }
     }
 
+    function endLive() {
+      if (!confirm("Una uhakika unataka kumaliza live?")) return;
+      // Notify others
+      try {
+        const data = new TextEncoder().encode(JSON.stringify({ type: "live_ended" }));
+        room.localParticipant.publishData(data, { reliable: true });
+      } catch(e) {}
+      showLiveEnded();
+    }
+
+    // ================= CHAT =================
     function sendChat() {
       const input = document.getElementById("chat-input");
       const msg = input.value.trim();
-      if (!msg) return;
-      const data = new TextEncoder().encode(JSON.stringify({
+      if (!msg || !room) return;
+
+      const payload = {
         type: "chat",
         user: username,
         message: msg
-      }));
-      room.localParticipant.publishData(data, LivekitClient.DataPacket_Kind.RELIABLE);
+      };
+      const data = new TextEncoder().encode(JSON.stringify(payload));
+      room.localParticipant.publishData(data, { reliable: true });
       addChatMessage(username, msg);
       input.value = "";
     }
 
     function handleData(payload, participant) {
-      const data = JSON.parse(new TextDecoder().decode(payload));
-      if (data.type === "chat") {
-        addChatMessage(data.user, data.message);
-      }
+      try {
+        const data = JSON.parse(new TextDecoder().decode(payload));
+        if (data.type === "chat") {
+          addChatMessage(data.user, data.message);
+        } else if (data.type === "like") {
+          likeCount = data.count || likeCount + 1;
+          document.getElementById("like-count").textContent = formatCount(likeCount);
+        } else if (data.type === "live_ended") {
+          showLiveEnded();
+        }
+      } catch (e) {}
     }
 
     function addChatMessage(user, message) {
+      const container = document.getElementById("chat-container");
       const div = document.createElement("div");
-      div.innerHTML = `<b class="text-blue-400">${user}</b>: ${message}`;
-      document.getElementById("chat-messages").appendChild(div);
+      div.className = "chat-msg";
+      div.innerHTML = `<b>${escapeHtml(user)}</b> ${escapeHtml(message)}`;
+      container.appendChild(div);
+      // Keep only last 30 messages
+      while (container.children.length > 30) {
+        container.removeChild(container.firstChild);
+      }
+      container.scrollTop = container.scrollHeight;
     }
 
+    function escapeHtml(text) {
+      const d = document.createElement("div");
+      d.textContent = text;
+      return d.innerHTML;
+    }
+
+    function focusChat() {
+      document.getElementById("chat-input").focus();
+    }
+
+    // ================= LIKE =================
+    function toggleLike() {
+      if (hasLiked) return;
+      hasLiked = true;
+      likeCount++;
+      document.getElementById("like-icon").textContent = "❤️";
+      document.getElementById("like-icon").classList.add("liked");
+      document.getElementById("like-count").textContent = formatCount(likeCount);
+
+      // Broadcast like
+      if (room) {
+        const data = new TextEncoder().encode(JSON.stringify({
+          type: "like",
+          count: likeCount
+        }));
+        room.localParticipant.publishData(data, { reliable: false });
+      }
+    }
+
+    function formatCount(n) {
+      if (n >= 1000000) return (n / 1000000).toFixed(1) + "M";
+      if (n >= 1000) return (n / 1000).toFixed(1) + "K";
+      return n.toString();
+    }
+
+    // ================= UTIL =================
     function copyLink() {
-      const link = `${window.location.origin}?room=${currentRoomId}`;
-      navigator.clipboard.writeText(link);
-      alert("Link imenakiliwa!");
+      const link = `${window.location.origin}${window.location.pathname}?room=${currentRoomId}`;
+      navigator.clipboard.writeText(link).then(() => {
+        alert("Link imenakiliwa!");
+      }).catch(() => {
+        prompt("Nakili link hii:", link);
+      });
     }
 
     function leaveRoom() {
-      if (room) room.disconnect();
-      location.reload();
+      if (isHost) {
+        if (!confirm("Ukiondoka live itamalizika. Unaendelea?")) return;
+        endLive();
+      } else {
+        if (room) room.disconnect();
+        location.reload();
+      }
     }
 
-    // Auto join from URL
+    // ================= INIT =================
     window.onload = () => {
-      if (token && username) showDashboard();
+      if (token && username) {
+        showDashboard();
+      }
       const params = new URLSearchParams(window.location.search);
-      if (params.get("room") && token) {
-        joinRoom(params.get("room"), false);
+      const roomParam = params.get("room");
+      if (roomParam && token) {
+        // Small delay to let dashboard render then join
+        setTimeout(() => joinRoom(roomParam, false), 300);
       }
     };
   </script>
